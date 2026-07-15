@@ -10,6 +10,7 @@ from favro_mcp.api.models import (
     Collection,
     Column,
     Comment,
+    Lane,
     Organization,
     Tag,
     Task,
@@ -316,6 +317,14 @@ class FavroClient:
         """Get a specific widget (board)."""
         data = self._get(f"/widgets/{widget_common_id}")
         return Widget.model_validate(data)
+
+    def get_lanes(self, widget_common_id: str) -> list[Lane]:
+        """Get all lanes (swimlanes) for a widget.
+
+        Lanes are read-only and returned nested in the widget object; a board
+        without lanes enabled yields an empty list.
+        """
+        return self.get_widget(widget_common_id).lanes
 
     # Column endpoints
     def get_columns(self, widget_common_id: str) -> list[Column]:

@@ -11,6 +11,7 @@ from favro_mcp.resolvers import (
     BoardResolver,
     CardResolver,
     ColumnResolver,
+    LaneResolver,
     TagResolver,
     UserResolver,
 )
@@ -297,6 +298,7 @@ def create_card(
     ctx: Context,
     board: str | None = None,
     column: str | None = None,
+    lane: str | None = None,
     description: str | None = None,
     tags: list[str] | None = None,
     assignees: list[str] | None = None,
@@ -307,6 +309,8 @@ def create_card(
         name: Card name/title
         board: Board ID or name (uses current board if not specified)
         column: Column ID or name to place the card in
+        lane: Lane (swimlane) ID or name to place the card in. Only applies to
+            boards with lanes enabled; use list_lanes to see available lanes.
         description: Detailed description. Favro supports a subset of Markdown:
             **bold**, *italic*, ~~strikethrough~~, `inline code`, ```code blocks```,
             [links](url), bullet lists, numbered lists, headings (# and ##
@@ -335,6 +339,11 @@ def create_card(
         if column:
             column_id = ColumnResolver(client).resolve(column, board_id=board_id).column_id
 
+        # Resolve lane if provided
+        lane_id = None
+        if lane:
+            lane_id = LaneResolver(client).resolve(lane, board_id=board_id).lane_id
+
         # Resolve tags if provided
         tag_ids = None
         if tags:
@@ -356,6 +365,7 @@ def create_card(
             name=name,
             widget_common_id=board_id,
             column_id=column_id,
+            lane_id=lane_id,
             detailed_description=" " if description else None,
             tags=tag_ids,
             assignments=user_ids,
@@ -383,6 +393,7 @@ def update_card(
     board: str | None = None,
     name: str | None = None,
     description: str | None = None,
+    lane: str | None = None,
     archived: bool | None = None,
     custom_fields: list[dict[str, Any]] | None = None,
     tasks: list[dict[str, Any]] | None = None,
@@ -403,6 +414,8 @@ def update_card(
             unsupported syntax causes the entire description to be stored as
             plain text. For checklists, use the add_tasklist and add_task
             parameters instead.
+        lane: Lane (swimlane) ID or name to move the card into. Only applies to
+            boards with lanes enabled; use list_lanes to see available lanes.
         archived: Archive or unarchive the card
         custom_fields: List of custom field updates. Each dict should contain
             'customFieldId' and the appropriate value field for the field type:
@@ -433,6 +446,14 @@ def update_card(
 
         c = CardResolver(client).resolve(card, board_id=board_id)
 
+        # Resolve lane if provided (falls back to the card's own board)
+        lane_id = None
+        if lane:
+            lane_board = board_id or c.widget_common_id
+            if not lane_board:
+                raise ValueError("Board required to resolve lane")
+            lane_id = LaneResolver(client).resolve(lane, board_id=lane_board).lane_id
+
         # Favro only parses markdown if detailedDescription already has
         # content.  Prime the field with a space when it is currently empty.
         if description:
@@ -445,6 +466,7 @@ def update_card(
             card_id=c.card_id,
             name=name,
             detailed_description=description,
+            lane_id=lane_id,
             archived=archived,
             custom_fields=custom_fields,
         )
@@ -488,12 +510,16 @@ def update_card(
 @mcp.tool
 def move_card(
     card: str,
-    column: str,
     ctx: Context,
+    column: str | None = None,
+    lane: str | None = None,
     board: str | None = None,
     to_board: str | None = None,
 ) -> dict[str, Any]:
-    """Move a card to a different column, optionally on another board.
+    """Move a card to a different column and/or lane, optionally on another board.
+
+    Specify a column, a lane, or both. Lanes only apply to boards with lanes
+    enabled; use list_lanes to see available lanes.
 
     A card can be committed to several boards at once. Favro's API treats a
     board change as "commit" (add to the target board, keep the original) by
@@ -504,6 +530,7 @@ def move_card(
         card: Card ID, sequential ID (#123), or name.
         column: Target column ID or name (on to_board if given, else on the
             card's current board).
+        lane: Target lane (swimlane) ID or name.
         board: Source board ID or name — where the card currently lives. Used
             to resolve the correct card instance when the card exists on more
             than one board. Defaults to the current board context.
@@ -513,6 +540,9 @@ def move_card(
     Returns:
         The updated card details
     """
+    if not column and not lane:
+        raise ValueError("Specify a column and/or a lane to move the card.")
+
     favro_ctx = get_favro_context(ctx)
     favro_ctx.require_org()
     with favro_ctx.get_client() as client:
@@ -536,30 +566,36 @@ def move_card(
         if to_board:
             target_board = BoardResolver(client).resolve(to_board).widget_common_id
         if not target_board:
-            raise ValueError("Board ID required to resolve the target column")
+            raise ValueError("Board ID required to resolve the target column/lane")
 
-        col = ColumnResolver(client).resolve(column, board_id=target_board)
+        col = ColumnResolver(client).resolve(column, board_id=target_board) if column else None
+        ln = LaneResolver(client).resolve(lane, board_id=target_board) if lane else None
 
-        # Only a board change needs drag mode; a same-board column move does not.
+        # Only a board change needs drag mode; a same-board move does not.
         cross_board = target_board != c.widget_common_id
         updated = client.update_card(
             card_id=c.card_id,
-            column_id=col.column_id,
+            column_id=col.column_id if col else None,
+            lane_id=ln.lane_id if ln else None,
             widget_common_id=target_board,
             drag_mode="move" if cross_board else None,
         )
 
-        location = (
-            f"to board {target_board} column '{col.name}'"
-            if cross_board
-            else f"to column '{col.name}'"
-        )
+        destinations = [d for d in (
+            f"column '{col.name}'" if col else None,
+            f"lane '{ln.name}'" if ln else None,
+        ) if d]
+        location = " and ".join(destinations)
+        if cross_board:
+            location = f"board {target_board} " + location
         return {
-            "message": f"Moved card '{updated.name}' {location}",
+            "message": f"Moved card '{updated.name}' to {location}",
             "card_id": updated.card_id,
             "widget_common_id": target_board,
-            "column_id": col.column_id,
-            "column_name": col.name,
+            "column_id": col.column_id if col else None,
+            "column_name": col.name if col else None,
+            "lane_id": ln.lane_id if ln else None,
+            "lane_name": ln.name if ln else None,
         }
 
 
