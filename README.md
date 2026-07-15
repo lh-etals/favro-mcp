@@ -214,8 +214,9 @@ See [Codex MCP documentation](https://developers.openai.com/codex/mcp/) for more
 | ------------ | ---------------------------- |
 | `list_lanes` | List lanes (swimlanes) on board |
 
-Lanes are read-only in the Favro API (no create/rename/delete). Use a `lane_id`
-from `list_lanes` as the `lane_id` argument to `create_card` / `update_card`.
+Lanes themselves are read-only in the Favro API (no create/rename/delete). To
+place a card in a lane, pass its ID or name as the `lane` argument to
+`create_card`, `update_card`, or `move_card` (use `list_lanes` to discover them).
 
 ---
 
