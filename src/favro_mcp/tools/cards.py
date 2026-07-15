@@ -514,17 +514,28 @@ def move_card(
     column: str | None = None,
     lane: str | None = None,
     board: str | None = None,
+    to_board: str | None = None,
 ) -> dict[str, Any]:
-    """Move a card to a different column and/or lane (swimlane).
+    """Move a card to a different column and/or lane, optionally on another board.
 
     Specify a column, a lane, or both. Lanes only apply to boards with lanes
     enabled; use list_lanes to see available lanes.
 
+    A card can be committed to several boards at once. Favro's API treats a
+    board change as "commit" (add to the target board, keep the original) by
+    default, which looks like a copy; this tool uses "move" so a cross-board
+    move actually relocates the card.
+
     Args:
-        card: Card ID, sequential ID (#123), or name
-        column: Target column ID or name
-        lane: Target lane (swimlane) ID or name
-        board: Board ID or name (needed for name lookups)
+        card: Card ID, sequential ID (#123), or name.
+        column: Target column ID or name (on to_board if given, else on the
+            card's current board).
+        lane: Target lane (swimlane) ID or name.
+        board: Source board ID or name — where the card currently lives. Used
+            to resolve the correct card instance when the card exists on more
+            than one board. Defaults to the current board context.
+        to_board: Destination board ID or name. Omit to move within the same
+            board.
 
     Returns:
         The updated card details
@@ -535,34 +546,52 @@ def move_card(
     favro_ctx = get_favro_context(ctx)
     favro_ctx.require_org()
     with favro_ctx.get_client() as client:
-        board_id = board or favro_ctx.current_board_id
+        source_board = board or favro_ctx.current_board_id
         if board:
-            board_id = BoardResolver(client).resolve(board).widget_common_id
+            source_board = BoardResolver(client).resolve(board).widget_common_id
 
-        c = CardResolver(client).resolve(card, board_id=board_id)
+        c = CardResolver(client).resolve(card, board_id=source_board)
 
-        # Use the card's board if not specified
-        target_board = board_id or c.widget_common_id
+        # Make sure we resolved the instance on the intended source board, so we
+        # move the right one (each board instance has its own card_id).
+        if source_board and c.widget_common_id and c.widget_common_id != source_board:
+            raise ValueError(
+                f"Card '{card}' resolved to board {c.widget_common_id}, not the "
+                f"source board {source_board}. Pass 'board' as the board the card "
+                "currently lives on."
+            )
+
+        # Destination board: explicit to_board, else the card's current board.
+        target_board = source_board or c.widget_common_id
+        if to_board:
+            target_board = BoardResolver(client).resolve(to_board).widget_common_id
         if not target_board:
             raise ValueError("Board ID required to resolve the target column/lane")
 
         col = ColumnResolver(client).resolve(column, board_id=target_board) if column else None
         ln = LaneResolver(client).resolve(lane, board_id=target_board) if lane else None
 
+        # Only a board change needs drag mode; a same-board move does not.
+        cross_board = target_board != c.widget_common_id
         updated = client.update_card(
             card_id=c.card_id,
             column_id=col.column_id if col else None,
             lane_id=ln.lane_id if ln else None,
             widget_common_id=target_board,
+            drag_mode="move" if cross_board else None,
         )
 
         destinations = [d for d in (
             f"column '{col.name}'" if col else None,
             f"lane '{ln.name}'" if ln else None,
         ) if d]
+        location = " and ".join(destinations)
+        if cross_board:
+            location = f"board {target_board} " + location
         return {
-            "message": f"Moved card '{updated.name}' to " + " and ".join(destinations),
+            "message": f"Moved card '{updated.name}' to {location}",
             "card_id": updated.card_id,
+            "widget_common_id": target_board,
             "column_id": col.column_id if col else None,
             "column_name": col.name if col else None,
             "lane_id": ln.lane_id if ln else None,
