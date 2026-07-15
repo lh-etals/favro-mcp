@@ -208,6 +208,15 @@ See [Codex MCP documentation](https://developers.openai.com/codex/mcp/) for more
 | `move_column`   | Move column position  |
 | `delete_column` | Delete a column       |
 
+### Lanes (Swimlanes)
+
+| Tool         | Description                  |
+| ------------ | ---------------------------- |
+| `list_lanes` | List lanes (swimlanes) on board |
+
+Lanes are read-only in the Favro API (no create/rename/delete). Use a `lane_id`
+from `list_lanes` as the `lane_id` argument to `create_card` / `update_card`.
+
 ---
 
 ## Development

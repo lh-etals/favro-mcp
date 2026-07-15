@@ -55,6 +55,17 @@ class Collection(BaseModel):
     public_sharing: str | None = Field(default=None, alias="publicSharing")
 
 
+class Lane(BaseModel):
+    """Lane (swimlane) model.
+
+    Lanes are read-only in the Favro API: they are returned nested in the
+    widget object and cannot be created, updated, or deleted via the API.
+    """
+
+    lane_id: str = Field(alias="laneId")
+    name: str
+
+
 class Widget(BaseModel):
     """Widget (board) model."""
 
@@ -70,6 +81,7 @@ class Widget(BaseModel):
     breakdown_card_common_id: str | None = Field(
         default=None, alias="breakdownCardCommonId"
     )
+    lanes: list[Lane] = Field(default=[])
 
 
 class Column(BaseModel):
