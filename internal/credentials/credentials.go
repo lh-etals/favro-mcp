@@ -80,9 +80,10 @@ func Save(email, token string) error {
 	return os.WriteFile(p, b, 0o600)
 }
 
-// PromptAndSave interactively asks for the Favro email and API token (input
-// hidden when on a TTY), persists them, and returns what was entered.
-func PromptAndSave() (email, token string, err error) {
+// Prompt interactively asks for the Favro email and API token (input hidden
+// when on a TTY) and returns them. It does NOT save - the caller verifies
+// against the API first, then calls Save only on success.
+func Prompt() (email, token string, err error) {
 	r := bufio.NewReader(os.Stdin)
 	fmt.Print("Favro email: ")
 	line, _ := r.ReadString('\n')
@@ -103,9 +104,6 @@ func PromptAndSave() (email, token string, err error) {
 	}
 	if email == "" || token == "" {
 		return "", "", fmt.Errorf("email and token are required")
-	}
-	if err := Save(email, token); err != nil {
-		return "", "", err
 	}
 	return email, token, nil
 }

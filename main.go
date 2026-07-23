@@ -40,33 +40,57 @@ func main() {
 	}
 }
 
-// runLogin prompts for (or accepts via flags) the Favro email + API token,
-// stores them centrally, and verifies them against the Favro API.
+// runLogin obtains Favro credentials (via flags or interactive prompt), verifies
+// them against the live API, and only then persists them. Invalid credentials
+// are never saved. In unattended mode (both --email and --token given) an
+// invalid attempt exits with a non-zero status; interactively it re-prompts.
 func runLogin(args []string) {
 	fs := flag.NewFlagSet("favro-mcp login", flag.ExitOnError)
 	email := fs.String("email", "", "Favro email (else prompted)")
 	token := fs.String("token", "", "Favro API token (else prompted, hidden)")
 	_ = fs.Parse(args)
 
-	e, t := *email, *token
-	if e == "" || t == "" {
-		var err error
-		e, t, err = credentials.PromptAndSave()
+	verify := func(e, t string) (int, error) {
+		orgs, err := favro.NewClient(e, t, "").GetOrganizations()
+		if err != nil {
+			return 0, err
+		}
+		return len(orgs), nil
+	}
+
+	// Unattended: both credentials supplied via flags - verify once, save or fail.
+	if *email != "" && *token != "" {
+		n, err := verify(*email, *token)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Credentials invalid: %v\nNot saved.\n", err)
+			os.Exit(1)
+		}
+		if err := credentials.Save(*email, *token); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Printf("Credentials verified - %d organization(s) accessible.\nSaved to ~/.favro-mcp/credentials.json\n", n)
+		return
+	}
+
+	// Interactive: prompt until valid (or cancelled).
+	for {
+		e, t, err := credentials.Prompt()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-	} else if err := credentials.Save(e, t); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
-	// Verify against the live API so a typo doesn't silently break the server.
-	client := favro.NewClient(e, t, "")
-	if orgs, err := client.GetOrganizations(); err != nil {
-		fmt.Fprintf(os.Stderr, "Credentials saved to ~/.favro-mcp/credentials.json, but verification failed: %v\n", err)
-	} else {
-		fmt.Printf("Credentials verified - %d organization(s) accessible.\nSaved to ~/.favro-mcp/credentials.json\n", len(orgs))
+		n, err := verify(e, t)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Verification failed (%v). Credentials not saved - try again.\n", err)
+			continue
+		}
+		if err := credentials.Save(e, t); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Printf("Credentials verified - %d organization(s) accessible.\nSaved to ~/.favro-mcp/credentials.json\n", n)
+		return
 	}
 }
 

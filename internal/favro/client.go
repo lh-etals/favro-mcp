@@ -92,6 +92,7 @@ func (c *Client) do(method, path string, params url.Values, body []byte, content
 	}
 
 	text, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // cap at 1 MiB
+	recordExchange(method, u, body, resp.StatusCode, text)
 	switch {
 	case resp.StatusCode == 401:
 		return nil, &AuthError{&APIError{Status: 401, Message: "Invalid credentials"}}
