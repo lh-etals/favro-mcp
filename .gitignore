@@ -14,3 +14,11 @@
 
 # Local MCP config (may contain credentials)
 .mcp.json
+
+# Raw API recordings (contain REAL PII/credentials). Capture with
+# FAVRO_RECORD_DIR, then anonymize into testdata/fixtures/ BEFORE committing.
+# Never commit the raw directory.
+/recordings/
+/testdata/recordings/
+/testdata/recordings-*/
+
