@@ -59,6 +59,18 @@ func TestFrontmatterValidAndOrdered(t *testing.T) {
 			wantKeys:   []string{"board", "page", "pages", "query", "cards"},
 			wantInBody: "1 card(s)",
 		},
+		{
+			name: "get_card_details (title first)",
+			rendered: rendered{
+				front: cardDetailFront{
+					Title: "Fix login redirect", Seq: 3709, CardID: "c7e4", CardCommonID: "d1a2",
+					Board: "Tasks", BoardID: "255a", Column: "In Progress",
+				},
+				body: "# #3709 Fix login redirect\n",
+			}.String(),
+			wantKeys:   []string{"title", "seq", "card_id", "card_common_id", "board", "board_id", "column"},
+			wantInBody: "#3709",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

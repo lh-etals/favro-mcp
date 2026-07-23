@@ -347,17 +347,19 @@ func (s *Server) getCardDetails(_ context.Context, _ *mcp.CallToolRequest, args 
 	}
 
 	front := cardDetailFront{
-		CardID: c.CardID, CardCommonID: c.CardCommonID, Seq: c.SequentialID,
+		Title: c.Name, Seq: c.SequentialID,
+		CardID: c.CardID, CardCommonID: c.CardCommonID,
 		Board: boardName, BoardID: cardBoard, Column: colName,
 	}
 	return textResult(rendered{front: front, body: b.String()}.String())
 }
 
-// cardDetailFront carries the stable identifiers for get_card_details.
+// cardDetailFront carries the stable identifiers + title for get_card_details.
 type cardDetailFront struct {
+	Title        string `yaml:"title"`
+	Seq          int    `yaml:"seq"`
 	CardID       string `yaml:"card_id"`
 	CardCommonID string `yaml:"card_common_id"`
-	Seq          int    `yaml:"seq"`
 	Board        string `yaml:"board"`
 	BoardID      string `yaml:"board_id"`
 	Column       string `yaml:"column,omitempty"`
