@@ -11,7 +11,9 @@ import (
 	"time"
 )
 
-const BaseURL = "https://favro.com/api/v1"
+// BaseURL is the Favro API root. It is a var (not a const) so tests can point
+// the client at a mock server.
+var BaseURL = "https://favro.com/api/v1"
 
 // Errors --------------------------------------------------------------------
 
