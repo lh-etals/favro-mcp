@@ -1,47 +1,89 @@
 # Favro MCP
 
-MCP server for interacting with Favro project management.
+A single-binary [MCP](https://modelcontextprotocol.io) server for
+[Favro](https://favro.com) — rewritten in Go for speed, portability, and a
+zero-dependency install.
 
-## Installation
+One static **~9 MB** binary. No Python, no `uv`, no `pip`, no Node. It runs
+on Linux, macOS, and Windows (x64 + arm64), **auto-detects which AI clients you
+have installed**, and registers itself with the ones you pick.
+
+- **28 MCP tools** across Organizations, Collections, Boards, Cards, Tags,
+  Users, Columns, and Lanes
+- **Universal one-command installers** — `curl | sh` on macOS/Linux,
+  `irm | iex` on Windows
+- **Auto-registers** with Claude Desktop, Claude Code, Cursor, Codex, Gemini
+  CLI, Windsurf, Zed, Cline, Roo Code, Amazon Q, and Continue
+- **Secure by design** — your Favro token lives in your local client config and
+  talks straight to the Favro API. No proxy, no third-party service.
+
+A Go port of [truls27a/favro-mcp](https://github.com/truls27a/favro-mcp)
+(same 28 tools, same Favro API). Maintained by [Etals](https://etals.com).
+
+---
+
+## Install
+
+**macOS / Linux** — downloads the matching binary to `~/.favro-mcp/bin` and
+adds it to your `PATH`:
 
 ```bash
-pip install favro-mcp
+curl -fsSL https://github.com/lh-etals/favro-mcp/raw/main/install.sh | sh
 ```
 
-### Getting Your Favro API Token
+**Windows (PowerShell)** — downloads to `%LOCALAPPDATA%\favro-mcp` and adds it
+to your user `PATH`:
 
-1. Log in to [Favro](https://favro.com/l/login)
-2. Click your **username** (top-left corner)
-3. Select **My Profile**
-4. Go to **API Tokens**
-5. Click **Create new token**
-6. Give it a name (e.g., "Favro MCP") and click **Create**
-7. **Copy the token** — you won't be able to see it again!
-
-<details>
-<summary><strong>Setup for Claude Code</strong></summary>
-
-```bash
-claude mcp add --transport stdio favro \
-  -e FAVRO_EMAIL=your-email@example.com \
-  -e FAVRO_API_TOKEN=your-token \
-  -- favro-mcp
+```powershell
+irm https://github.com/lh-etals/favro-mcp/raw/main/install.ps1 | iex
 ```
 
-See [Claude Code MCP documentation](https://docs.anthropic.com/en/docs/claude-code/mcp) for more details.
+Each installer picks the right asset for your OS/arch
+(`favro-mcp-<os>-<arch>[.exe]`) from the latest
+[GitHub Release](https://github.com/lh-etals/favro-mcp/releases). **Open a new
+terminal** afterward so `favro-mcp` is found.
 
-</details>
+### Get your Favro API token
 
-<details>
-<summary><strong>Setup for Claude Desktop</strong></summary>
+1. Log in to [Favro](https://favro.com)
+2. Click your **username** (top-left) → **My Profile**
+3. Go to **API Tokens** → **Create new token**
+4. **Copy the token** — you won't see it again.
 
-Add the following to your `claude_desktop_config.json` (`~/Library/Application Support/Claude/` on macOS, `%APPDATA%\Claude` on Windows):
+### Register with your AI clients
+
+```
+favro-mcp install
+```
+
+This scans your machine for MCP-capable clients (Claude Desktop, Claude Code,
+Cursor, Codex, Gemini CLI, Windsurf, Zed, Cline, Roo Code, Amazon Q, Continue),
+lets you pick which to wire up, and prompts for your Favro email + token.
+Each client's config is written **safely and idempotently** — your other
+servers are preserved, and re-running won't duplicate anything.
+
+Flags:
+
+| Flag | What it does |
+| --- | --- |
+| `--dry-run` | Show exactly what would change, write nothing |
+| `--yes` | Register with **all** detected clients, no prompts |
+| `--name <name>` | Server name written into configs (default `favro`) |
+| `--email <addr>` | Provide Favro email non-interactively |
+| `--token <tok>` | Provide Favro API token non-interactively |
+
+Remove it everywhere later with `favro-mcp uninstall`.
+
+### Manual configuration
+
+Prefer to edit a client config by hand? Point it at the binary — the server
+reads `FAVRO_EMAIL` and `FAVRO_API_TOKEN` from its environment:
 
 ```json
 {
   "mcpServers": {
     "favro": {
-      "command": "/full/path/to/favro-mcp",
+      "command": "/absolute/path/to/favro-mcp",
       "env": {
         "FAVRO_EMAIL": "your-email@example.com",
         "FAVRO_API_TOKEN": "your-token-here"
@@ -51,229 +93,125 @@ Add the following to your `claude_desktop_config.json` (`~/Library/Application S
 }
 ```
 
-**Finding the full path:** Claude Desktop doesn't inherit your shell's PATH, so you need the absolute path to `favro-mcp`:
+---
 
-```bash
-# macOS/Linux (with pip)
-which favro-mcp
+## Why this fork?
 
-# Windows (PowerShell)
-(Get-Command favro-mcp).Source
-```
+The upstream [truls27a/favro-mcp](https://github.com/truls27a/favro-mcp) is a
+Python server installed via `uv`/`pip`. This is a Go rewrite that exposes the
+**same 28 tools against the same Favro API**, but ships as one static binary
+with a universal installer and built-in client detection.
 
-Then restart Claude Desktop.
+| | Python upstream | **This fork (Go)** |
+| --- | --- | --- |
+| Runtime | Python + `uv`/`pip` | **None** — one static binary |
+| Install | Per-OS Python setup | **`curl \| sh`** / **`irm \| iex`**, 6 targets |
+| Size | Python env + deps | **~9 MB** single file |
+| Cross-platform | Per-platform packaging | `CGO_ENABLED=0`, 6 targets from one build |
+| AI-client wiring | Manual JSON editing | **Auto-detects 11 clients**, writes config for you |
+| Favro tools | 28 | **28 (identical API surface)** |
 
-See [Claude Desktop MCP documentation](https://support.anthropic.com/en/articles/10949351-getting-started-with-model-context-protocol-mcp-on-claude-for-desktop) for more details.
-
-</details>
-
-<details>
-<summary><strong>Setup for Cursor</strong></summary>
-
-Add the following to your Cursor MCP configuration file:
-
-- **Global (all projects):** `~/.cursor/mcp.json`
-- **Project-specific:** `.cursor/mcp.json` in your project root
-
-```json
-{
-  "mcpServers": {
-    "favro": {
-      "command": "favro-mcp",
-      "env": {
-        "FAVRO_EMAIL": "your-email@example.com",
-        "FAVRO_API_TOKEN": "your-token-here"
-      }
-    }
-  }
-}
-```
-
-You can also open the MCP settings via Command Palette: `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows) → search "MCP" → select "View: Open MCP Settings".
-
-After configuration, use Agent mode in Cursor's AI chat to access Favro tools.
-
-See [Cursor MCP documentation](https://cursor.com/docs/context/mcp) for more details.
-
-</details>
-
-<details>
-<summary><strong>Setup for VS Code</strong></summary>
-
-Add the following to `.vscode/mcp.json` in your workspace:
-
-```json
-{
-  "servers": {
-    "favro": {
-      "type": "stdio",
-      "command": "favro-mcp",
-      "env": {
-        "FAVRO_EMAIL": "your-email@example.com",
-        "FAVRO_API_TOKEN": "your-token-here"
-      }
-    }
-  }
-}
-```
-
-Use Agent mode in GitHub Copilot Chat to access Favro tools.
-
-See [VS Code MCP documentation](https://code.visualstudio.com/docs/copilot/customization/mcp-servers) for more details.
-
-</details>
-
-<details>
-<summary><strong>Setup for Codex CLI</strong></summary>
-
-Add the following to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.favro]
-command = "favro-mcp"
-
-[mcp_servers.favro.env]
-FAVRO_EMAIL = "your-email@example.com"
-FAVRO_API_TOKEN = "your-token-here"
-```
-
-Or add via CLI:
-
-```bash
-codex mcp add favro \
-  --env FAVRO_EMAIL=your-email@example.com \
-  --env FAVRO_API_TOKEN=your-token \
-  -- favro-mcp
-```
-
-See [Codex MCP documentation](https://developers.openai.com/codex/mcp/) for more details.
-
-</details>
+Full credit to the original — this repo is a faster, lighter way to run the
+same thing.
 
 ---
 
 ## Tools
 
-### Organizations
+All **28 tools** use the Favro REST API. IDs, names, or emails are accepted
+wherever a Favro object is referenced.
 
-| Tool                       | Description              |
-| -------------------------- | ------------------------ |
-| `list_organizations`       | List all organizations   |
-| `get_current_organization` | Get current organization |
-| `set_organization`         | Set active organization  |
+### Organizations
+| Tool | Description |
+| --- | --- |
+| `list_organizations` | List all organizations you can access |
+| `get_current_organization` | Get the currently active organization |
+| `set_organization` | Set the active organization (by ID or name) |
 
 ### Collections (Folders)
-
-| Tool               | Description                    |
-| ------------------ | ------------------------------ |
-| `list_collections` | List all collections (folders) |
+| Tool | Description |
+| --- | --- |
+| `list_collections` | List all collections (folders containing boards) |
 
 ### Boards
-
-| Tool                | Description                                      |
-| ------------------- | ------------------------------------------------ |
-| `list_boards`       | List boards (optionally filter by collection)    |
-| `get_board`         | Get board with columns                           |
-| `get_current_board` | Get current board                                |
-| `set_board`         | Set active board                                 |
+| Tool | Description |
+| --- | --- |
+| `list_boards` | List boards (optionally filter by collection) |
+| `get_board` | Get a board with its columns and lanes |
+| `get_current_board` | Get the currently active board |
+| `set_board` | Set the active board (by ID or name) |
 
 ### Cards
-
-| Tool                 | Description          |
-| -------------------- | -------------------- |
-| `list_cards`         | List cards on board  |
-| `get_card_details`   | Get card details     |
-| `add_comment`        | Add a comment to card |
-| `create_card`        | Create a card        |
-| `update_card`        | Update a card        |
-| `move_card`          | Move card to column or another board |
-| `assign_card`        | Assign/unassign user |
-| `tag_card`           | Add/remove tag       |
-| `delete_card`        | Delete a card        |
-| `list_custom_fields` | List custom fields   |
+| Tool | Description |
+| --- | --- |
+| `list_cards` | List cards on a board (paginated, 100 per page) |
+| `get_card_details` | Full card: description, assignments, dates, custom fields, tasklists, comments |
+| `create_card` | Create a card (markdown desc, tags, assignees optional) |
+| `update_card` | Update a card's name, description, lane, archive state, custom fields, tasks |
+| `move_card` | Move a card to a column/lane, or to another board |
+| `delete_card` | Delete a card (`everywhere=true` removes it from all boards) |
+| `assign_card` | Assign / unassign a user (by ID, name, or email) |
+| `tag_card` | Add / remove a tag (by ID or name) |
+| `add_comment` | Add a comment to a card |
+| `upload_attachment` | Upload a file attachment (max 10 MB) to a card |
+| `list_custom_fields` | List custom-field definitions for `update_card` |
 
 ### Tags
+| Tool | Description |
+| --- | --- |
+| `list_tags` | List all tags (IDs, names, colors) |
 
-| Tool        | Description                |
-| ----------- | -------------------------- |
-| `list_tags` | List all tags              |
+### Users
+| Tool | Description |
+| --- | --- |
+| `list_users` | List users in the organization |
+| `get_user` | Look up a user by ID, name, or email |
 
 ### Columns
-
-| Tool            | Description           |
-| --------------- | --------------------- |
-| `list_columns`  | List columns on board |
-| `create_column` | Create a column       |
-| `rename_column` | Rename a column       |
-| `move_column`   | Move column position  |
-| `delete_column` | Delete a column       |
+| Tool | Description |
+| --- | --- |
+| `list_columns` | List a board's columns (sorted by position) |
+| `create_column` | Create a column (appends unless a position is given) |
+| `rename_column` | Rename a column (by column ID or name) |
+| `move_column` | Move a column to a new 0-based position |
+| `delete_column` | Delete a column (**and all its cards**) |
 
 ### Lanes (Swimlanes)
+| Tool | Description |
+| --- | --- |
+| `list_lanes` | List a board's lanes (swimlanes) |
 
-| Tool         | Description                  |
-| ------------ | ---------------------------- |
-| `list_lanes` | List lanes (swimlanes) on board |
-
-Lanes themselves are read-only in the Favro API (no create/rename/delete). To
-place a card in a lane, pass its ID or name as the `lane` argument to
-`create_card`, `update_card`, or `move_card` (use `list_lanes` to discover them).
+Lanes are read-only in the Favro API — they can't be created, renamed, or
+deleted. To place a card in a lane, pass the lane ID or name as the `lane`
+argument to `create_card`, `update_card`, or `move_card`.
 
 ---
 
-## Development
+## Build from source
 
-This project uses [uv](https://docs.astral.sh/uv/) for development.
+Requires [Go 1.25+](https://go.dev/dl/):
 
-### Setup
-
-1. Install uv:
-
-   **macOS / Linux:**
-
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-
-   **Windows (PowerShell):**
-
-   ```powershell
-   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-   ```
-
-2. Clone the repository:
-
-   ```bash
-   git clone https://github.com/truls27a/favro-mcp.git
-   cd favro-mcp
-   ```
-
-3. Install dependencies:
-   ```bash
-   uv sync --dev
-   ```
-
-### Running from Source
-
-To run a local/modified version instead of the published package:
-
-```json
-{
-  "mcpServers": {
-    "favro": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "/path/to/favro-mcp",
-        "python",
-        "-m",
-        "favro_mcp"
-      ],
-      "env": {
-        "FAVRO_EMAIL": "your-email@example.com",
-        "FAVRO_API_TOKEN": "your-token-here"
-      }
-    }
-  }
-}
+```bash
+git clone https://github.com/lh-etals/favro-mcp.git
+cd favro-mcp
+go build -o favro-mcp .
+./favro-mcp install
 ```
+
+Cross-compile all six targets with `CGO_ENABLED=0`:
+
+```bash
+for t in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 windows-arm64; do
+  CGO_ENABLED=0 GOOS="${t%-*}" GOARCH="${t#*-}" go build -ldflags="-s -w" -o "favro-mcp-$t" .
+done
+```
+
+Releases are produced by the `release` workflow on tag push
+(`git tag v0.x && git push --tags`).
+
+---
+
+## License
+
+MIT. Based on [truls27a/favro-mcp](https://github.com/truls27a/favro-mcp) by
+Truls Borgvall. Maintained by [Etals](https://etals.com).
