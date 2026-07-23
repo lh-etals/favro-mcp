@@ -7,11 +7,11 @@ import (
 )
 
 func registerUsers(srv *mcp.Server, s *Server) {
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "list_users",
 		Description: "List all users in the current organization with their IDs, names, emails, and roles.",
 	}, s.listUsers)
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "get_user",
 		Description: "Look up a user by ID, name, or email address. Useful for resolving user IDs returned in card details (assignments, comments) to human-readable user information.",
 	}, s.getUser)

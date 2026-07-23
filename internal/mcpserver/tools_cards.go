@@ -14,17 +14,24 @@ import (
 const maxAttachmentBytes = 10 << 20 // 10 MB Favro attachment limit
 
 func registerCards(srv *mcp.Server, s *Server) {
-	mcp.AddTool(srv, &mcp.Tool{Name: "list_cards", Description: "List cards on a specific board with pagination. Each page returns up to 100 cards."}, s.listCards)
-	mcp.AddTool(srv, &mcp.Tool{Name: "list_custom_fields", Description: "List custom field definitions in the organization. Use the customFieldId when updating card custom fields."}, s.listCustomFields)
-	mcp.AddTool(srv, &mcp.Tool{Name: "get_card_details", Description: "Get detailed information about a card: description, assignments, dates, custom fields, task lists with tasks, and comments."}, s.getCardDetails)
-	mcp.AddTool(srv, &mcp.Tool{Name: "add_comment", Description: "Add a comment to a card."}, s.addComment)
-	mcp.AddTool(srv, &mcp.Tool{Name: "create_card", Description: "Create a new card on a board. The board defaults to the current board. Markdown description, tags, and assignees are optional."}, s.createCard)
-	mcp.AddTool(srv, &mcp.Tool{Name: "update_card", Description: "Update a card's properties: name, markdown description, lane, archive state, custom fields, and task/checklist items."}, s.updateCard)
-	mcp.AddTool(srv, &mcp.Tool{Name: "move_card", Description: "Move a card to a different column and/or lane, optionally to another board. Uses drag mode 'move' so a cross-board move relocates the card rather than copying it."}, s.moveCard)
-	mcp.AddTool(srv, &mcp.Tool{Name: "assign_card", Description: "Assign or unassign a user (by ID, name, or email) from a card."}, s.assignCard)
-	mcp.AddTool(srv, &mcp.Tool{Name: "tag_card", Description: "Add or remove a tag (by ID or name) from a card."}, s.tagCard)
-	mcp.AddTool(srv, &mcp.Tool{Name: "delete_card", Description: "Delete a card. Set everywhere=true to delete it from all boards."}, s.deleteCard)
-	mcp.AddTool(srv, &mcp.Tool{Name: "upload_attachment", Description: "Upload a file attachment (max 10 MB) to a card."}, s.uploadAttachment)
+	// read
+	addTool(s, srv, TierRead, &mcp.Tool{Name: "list_cards", Description: "List cards on a specific board with pagination. Each page returns up to 100 cards."}, s.listCards)
+	addTool(s, srv, TierRead, &mcp.Tool{Name: "list_custom_fields", Description: "List custom field definitions in the organization. Use the customFieldId when updating card custom fields."}, s.listCustomFields)
+	addTool(s, srv, TierRead, &mcp.Tool{Name: "get_card_details", Description: "Get detailed information about a card: description, assignments, dates, custom fields, task lists with tasks, and comments."}, s.getCardDetails)
+	// write
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "add_comment", Description: "Add a comment to a card."}, s.addComment)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "create_card", Description: "Create a new card on a board. The board defaults to the current board. Markdown description, tags, and assignees are optional."}, s.createCard)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "update_card", Description: "Update a card's properties: name, markdown description, lane, archive state, custom fields, and task/checklist items."}, s.updateCard)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "move_card", Description: "Move a card to a different column and/or lane, optionally to another board. Uses drag mode 'move' so a cross-board move relocates the card rather than copying it."}, s.moveCard)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "assign_card", Description: "Assign or unassign a user (by ID, name, or email) from a card."}, s.assignCard)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "tag_card", Description: "Add or remove a tag (by ID or name) from a card."}, s.tagCard)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "upload_attachment", Description: "Upload a file attachment (max 10 MB) to a card."}, s.uploadAttachment)
+	// delete
+	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_card", Description: "Delete a card. Set everywhere=true to delete it from all boards."}, s.deleteCard)
+	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_comment", Description: "Delete a comment from a card by comment ID (undo for add_comment)."}, s.deleteComment)
+	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_task", Description: "Delete a task (checklist item) by task ID (undo for update_card's add_task)."}, s.deleteTask)
+	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_tasklist", Description: "Delete a task list (checklist) by tasklist ID (undo for update_card's add_tasklist)."}, s.deleteTasklist)
+	addTool(s, srv, TierDelete, &mcp.Tool{Name: "remove_attachment", Description: "Remove a file attachment from a card by its file URL (undo for upload_attachment)."}, s.removeAttachment)
 }
 
 // --- list_cards ------------------------------------------------------------
@@ -771,5 +778,99 @@ func (s *Server) uploadAttachment(_ context.Context, _ *mcp.CallToolRequest, arg
 		"name":     att.Name,
 		"file_url": att.FileURL,
 		"card_id":  c.CardID,
+	}, nil)
+}
+
+// --- delete_comment --------------------------------------------------------
+
+type deleteCommentArgs struct {
+	CommentID string `json:"comment_id" jsonschema:"The comment ID (from get_card_details)"`
+}
+
+func (s *Server) deleteComment(_ context.Context, _ *mcp.CallToolRequest, args deleteCommentArgs) (*mcp.CallToolResult, any, error) {
+	if _, err := s.requireOrg(); err != nil {
+		return jsonResult(nil, err)
+	}
+	client, err := s.client()
+	if err != nil {
+		return jsonResult(nil, err)
+	}
+	if err := client.DeleteComment(args.CommentID); err != nil {
+		return jsonResult(nil, err)
+	}
+	return jsonResult(map[string]any{"message": "Deleted comment: " + args.CommentID, "comment_id": args.CommentID}, nil)
+}
+
+// --- delete_task -----------------------------------------------------------
+
+type deleteTaskArgs struct {
+	TaskID string `json:"task_id" jsonschema:"The task (checklist item) ID"`
+}
+
+func (s *Server) deleteTask(_ context.Context, _ *mcp.CallToolRequest, args deleteTaskArgs) (*mcp.CallToolResult, any, error) {
+	if _, err := s.requireOrg(); err != nil {
+		return jsonResult(nil, err)
+	}
+	client, err := s.client()
+	if err != nil {
+		return jsonResult(nil, err)
+	}
+	if err := client.DeleteTask(args.TaskID); err != nil {
+		return jsonResult(nil, err)
+	}
+	return jsonResult(map[string]any{"message": "Deleted task: " + args.TaskID, "task_id": args.TaskID}, nil)
+}
+
+// --- delete_tasklist -------------------------------------------------------
+
+type deleteTasklistArgs struct {
+	TasklistID string `json:"tasklist_id" jsonschema:"The task list (checklist) ID"`
+}
+
+func (s *Server) deleteTasklist(_ context.Context, _ *mcp.CallToolRequest, args deleteTasklistArgs) (*mcp.CallToolResult, any, error) {
+	if _, err := s.requireOrg(); err != nil {
+		return jsonResult(nil, err)
+	}
+	client, err := s.client()
+	if err != nil {
+		return jsonResult(nil, err)
+	}
+	if err := client.DeleteTasklist(args.TasklistID); err != nil {
+		return jsonResult(nil, err)
+	}
+	return jsonResult(map[string]any{"message": "Deleted task list: " + args.TasklistID, "tasklist_id": args.TasklistID}, nil)
+}
+
+// --- remove_attachment -----------------------------------------------------
+
+type removeAttachmentArgs struct {
+	Card    string  `json:"card" jsonschema:"Card ID, sequential ID (#123), or name"`
+	FileURL string  `json:"file_url" jsonschema:"The attachment file URL (from upload_attachment / get_card_details)"`
+	Board   *string `json:"board,omitempty" jsonschema:"Board ID or name (needed for name lookups)"`
+}
+
+func (s *Server) removeAttachment(_ context.Context, _ *mcp.CallToolRequest, args removeAttachmentArgs) (*mcp.CallToolResult, any, error) {
+	if _, err := s.requireOrg(); err != nil {
+		return jsonResult(nil, err)
+	}
+	client, err := s.client()
+	if err != nil {
+		return jsonResult(nil, err)
+	}
+	boardID, err := s.resolveBoardArg(client, strOr(args.Board))
+	if err != nil {
+		return jsonResult(nil, err)
+	}
+	c, err := NewResolver(client).Card(args.Card, boardID)
+	if err != nil {
+		return jsonResult(nil, err)
+	}
+	if _, err := client.UpdateCard(favro.UpdateCardOpts{CardID: c.CardID, RemoveAttachments: []string{args.FileURL}}); err != nil {
+		return jsonResult(nil, err)
+	}
+	return jsonResult(map[string]any{
+		"message":  fmt.Sprintf("Removed attachment from card '%s'", c.Name),
+		"card_id":  c.CardID,
+		"file_url": args.FileURL,
 	}, nil)
 }

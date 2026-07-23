@@ -315,6 +315,7 @@ type UpdateCardOpts struct {
 	Archived          *bool
 	ListPosition      *float64
 	CustomFields      []map[string]any
+	RemoveAttachments []string // fileURLs to detach (PUT /cards/{id} removeAttachments)
 }
 
 func (c *Client) UpdateCard(o UpdateCardOpts) (*Card, error) {
@@ -363,6 +364,9 @@ func (c *Client) UpdateCard(o UpdateCardOpts) (*Card, error) {
 	}
 	if len(o.CustomFields) > 0 {
 		body["customFields"] = o.CustomFields
+	}
+	if len(o.RemoveAttachments) > 0 {
+		body["removeAttachments"] = o.RemoveAttachments
 	}
 	data, err := c.put("/cards/"+o.CardID, body, true)
 	if err != nil {
@@ -432,6 +436,11 @@ func (c *Client) CreateComment(cardCommonID, comment string) (*Comment, error) {
 	return decodeOne[Comment](data)
 }
 
+func (c *Client) DeleteComment(commentID string) error {
+	_, err := c.del("/comments/"+commentID, nil, true)
+	return err
+}
+
 // Custom fields -------------------------------------------------------------
 
 func (c *Client) GetCustomFields() ([]map[string]any, error) {
@@ -459,6 +468,11 @@ func (c *Client) CreateTasklist(cardCommonID, name string, position *int) (*Task
 		return nil, err
 	}
 	return decodeOne[TaskList](data)
+}
+
+func (c *Client) DeleteTasklist(tasklistID string) error {
+	_, err := c.del("/tasklists/"+tasklistID, nil, true)
+	return err
 }
 
 // Tasks ---------------------------------------------------------------------
@@ -503,4 +517,9 @@ func (c *Client) UpdateTask(taskID string, name *string, completed *bool, positi
 		return nil, err
 	}
 	return decodeOne[Task](data)
+}
+
+func (c *Client) DeleteTask(taskID string) error {
+	_, err := c.del("/tasks/"+taskID, nil, true)
+	return err
 }

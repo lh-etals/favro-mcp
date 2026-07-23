@@ -8,23 +8,23 @@ import (
 )
 
 func registerColumns(srv *mcp.Server, s *Server) {
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "list_columns",
 		Description: "List all columns on a specific board, sorted by position.",
 	}, s.listColumns)
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierWrite, &mcp.Tool{
 		Name:        "create_column",
 		Description: "Create a new column on a board. Appends to the end unless a position is given.",
 	}, s.createColumn)
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierWrite, &mcp.Tool{
 		Name:        "rename_column",
 		Description: "Rename a column (by column ID or name within a board).",
 	}, s.renameColumn)
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierWrite, &mcp.Tool{
 		Name:        "move_column",
 		Description: "Move a column to a new 0-based position.",
 	}, s.moveColumn)
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierDelete, &mcp.Tool{
 		Name:        "delete_column",
 		Description: "Delete a column from a board. WARNING: this also deletes all cards in the column.",
 	}, s.deleteColumn)

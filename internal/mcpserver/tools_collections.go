@@ -7,7 +7,7 @@ import (
 )
 
 func registerCollections(srv *mcp.Server, s *Server) {
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "list_collections",
 		Description: "List all collections (folders) in the organization. Collections are folders that contain boards. If you are looking for a board but cannot find it with list_boards, it may be inside a collection. Use the collection name or ID with list_boards(collection=...) to see boards inside that collection.",
 	}, s.listCollections)

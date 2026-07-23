@@ -10,22 +10,22 @@ import (
 )
 
 func registerBoards(srv *mcp.Server, s *Server) {
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "list_boards",
 		Description: "List boards in the organization. By default lists boards at the TOP LEVEL only (not inside collections/folders). To find boards inside a collection: first call list_collections, then pass that collection's name or ID as the collection argument.",
 	}, s.listBoards)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "get_board",
 		Description: "Get details of a specific board including its columns and lanes.",
 	}, s.getBoard)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "get_current_board",
 		Description: "Get details of the currently selected board, including its columns and lanes.",
 	}, s.getCurrentBoard)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "set_board",
 		Description: "Select a board (by ID or name) as the active board for card operations.",
 	}, s.setBoard)

@@ -87,10 +87,24 @@ Flags:
 | `--dry-run` | Show exactly what would change, write nothing |
 | `--yes` | Register with **all** detected clients, no prompts |
 | `--name <name>` | Server name written into configs (default `favro`) |
+| `--toolset <t>` | Toolset to expose: `read`, `write`, `delete`, or `custom` |
 | `--email <addr>` | Embed this email into configs (instead of using `login`) |
 | `--token <tok>` | Embed this token into configs (instead of using `login`) |
 
 Remove it everywhere later with `favro-mcp uninstall`.
+
+### Toolsets
+
+`install` asks which tools the server should expose (set permanently via
+`FAVRO_TOOLSET` / `FAVRO_TOOLS` in each client's config):
+
+- **Read-only** — list/get only. Cannot change anything. Safest for giving an
+  agent read access to your boards.
+- **Read + Write** *(default)* — also create/update/move cards, columns, tags,
+  comments, attachments. No deletes.
+- **Read + Write + Delete** — full access, including deletes.
+- **Custom** — a toggle view of every individual tool; pick exactly which ones
+  the agent may call.
 
 ### Manual configuration
 

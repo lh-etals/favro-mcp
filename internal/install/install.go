@@ -7,16 +7,18 @@ import (
 	"strings"
 
 	"github.com/lh-etals/favro-mcp/internal/credentials"
+	"github.com/lh-etals/favro-mcp/internal/mcpserver"
 )
 
 // Options controls install/uninstall behaviour.
 type Options struct {
-	DryRun bool
-	Yes    bool
-	Name   string
+	DryRun  bool
+	Yes     bool
+	Name    string
+	Toolset string // "", "read", "write", "delete", or "custom"
 
-	// Credentials written into each client's env block. If empty, the installer
-	// reads them from flags/env/stdin and falls back to placeholders.
+	// Credentials written into each client's env block (instead of the login
+	// store). If empty, the server reads `favro-mcp login` creds at runtime.
 	Email string
 	Token string
 }
@@ -128,10 +130,19 @@ func RunInstall(opts Options) error {
 		name = "favro"
 	}
 
+	// Toolset selection: which tools the registered server exposes.
+	env := map[string]string{}
+	tsEnv, err := chooseToolset(opts)
+	if err != nil {
+		return err
+	}
+	for k, v := range tsEnv {
+		env[k] = v
+	}
+
 	// Credentials are managed centrally by `favro-mcp login` (read by the
 	// server at runtime), so client configs do not embed secrets by default.
 	// We only embed them when explicitly provided via flags or FAVRO_* env.
-	env := map[string]string{}
 	email := opts.Email
 	token := opts.Token
 	if email == "" {
@@ -334,4 +345,72 @@ func describeRemove(r ApplyResult, dryRun bool) string {
 		return "not registered (nothing to remove)"
 	}
 	return describe(r)
+}
+
+// chooseToolset decides which env var configures the server's toolset:
+//   - read / write / delete  -> FAVRO_TOOLSET=<tier>
+//   - custom                 -> FAVRO_TOOLS=<comma list of enabled tools>
+//
+// Interactive when neither --yes nor an explicit --toolset is given.
+func chooseToolset(opts Options) (map[string]string, error) {
+	// Explicit tier from the flag.
+	switch opts.Toolset {
+	case mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete:
+		return map[string]string{"FAVRO_TOOLSET": opts.Toolset}, nil
+	case "custom":
+		if opts.Yes {
+			return nil, fmt.Errorf("--toolset=custom requires interactive selection (omit --yes)")
+		}
+		return pickCustomTools()
+	case "":
+		// fall through to interactive / default below
+	default:
+		return nil, fmt.Errorf("unknown --toolset %q (use read, write, delete, or custom)", opts.Toolset)
+	}
+
+	if opts.Yes {
+		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}, nil
+	}
+
+	options := []string{
+		"Read-only            - list/get only. Safest; cannot change anything.",
+		"Read + Write         - also create/update/move cards, columns, tags. (recommended)",
+		"Read + Write + Delete- full access, including deletes.",
+		"Custom               - toggle each tool on/off individually.",
+	}
+	switch selectOne("Which toolset should the server expose?", options, 1) {
+	case 0:
+		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierRead}, nil
+	case 1:
+		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}, nil
+	case 2:
+		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierDelete}, nil
+	default:
+		return pickCustomTools()
+	}
+}
+
+// pickCustomTools shows every tool as a toggle (read+write pre-checked, delete
+// off) and returns a FAVRO_TOOLS allowlist of the selected tool names.
+func pickCustomTools() (map[string]string, error) {
+	catalog := mcpserver.ToolCatalog()
+	choices := make([]choice, 0, len(catalog))
+	for _, t := range catalog {
+		// Default to the "write" preset on: read+write checked, delete off.
+		checked := t.Tier == mcpserver.TierRead || t.Tier == mcpserver.TierWrite
+		choices = append(choices, choice{
+			id:      t.Name,
+			label:   fmt.Sprintf("%-20s [%s] %s", t.Name, t.Tier, t.Description),
+			checked: checked,
+		})
+	}
+	ids, err := multiSelect("Toggle the tools to expose (space toggles, enter confirms):", choices)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		fmt.Println("No tools selected; defaulting to the Read + Write toolset.")
+		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}, nil
+	}
+	return map[string]string{"FAVRO_TOOLS": strings.Join(ids, ",")}, nil
 }

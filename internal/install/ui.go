@@ -16,6 +16,32 @@ type choice struct {
 	checked bool
 }
 
+// selectOne prints a numbered single-choice prompt and returns the chosen index.
+// Blank input selects defaultIdx.
+func selectOne(prompt string, options []string, defaultIdx int) int {
+	fmt.Println(prompt)
+	for i, o := range options {
+		mark := ""
+		if i == defaultIdx {
+			mark = " (default)"
+		}
+		fmt.Printf("  %d. %s%s\n", i+1, o, mark)
+	}
+	fmt.Printf("Choose [1-%d]: ", len(options))
+	r := bufio.NewReader(os.Stdin)
+	line, _ := r.ReadString('\n')
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return defaultIdx
+	}
+	var n int
+	if _, err := fmt.Sscanf(line, "%d", &n); err == nil && n >= 1 && n <= len(options) {
+		return n - 1
+	}
+	fmt.Println("Invalid choice; using default.")
+	return defaultIdx
+}
+
 // multiSelect shows an interactive checkbox list and returns the IDs of the
 // checked rows. Falls back to a plain numbered prompt when stdin is not a TTY
 // or raw mode is unavailable.

@@ -101,11 +101,12 @@ func runInstaller(uninstall bool, args []string) {
 	dryRun := fs.Bool("dry-run", false, "show what would change without writing anything")
 	yes := fs.Bool("yes", false, "register with all detected clients, no prompts")
 	name := fs.String("name", "favro", "server name written into client configs")
-	email := fs.String("email", "", "Favro email (else FAVRO_EMAIL env or prompt)")
-	token := fs.String("token", "", "Favro API token (else FAVRO_API_TOKEN env or prompt)")
+	toolset := fs.String("toolset", "", "toolset to expose: read, write, delete, or custom")
+	email := fs.String("email", "", "Favro email (else FAVRO_EMAIL env or `favro-mcp login`)")
+	token := fs.String("token", "", "Favro API token (else FAVRO_API_TOKEN env or `favro-mcp login`)")
 	_ = fs.Parse(args)
 
-	opts := install.Options{DryRun: *dryRun, Yes: *yes, Name: *name, Email: *email, Token: *token}
+	opts := install.Options{DryRun: *dryRun, Yes: *yes, Name: *name, Toolset: *toolset, Email: *email, Token: *token}
 	var err error
 	if uninstall {
 		err = install.RunUninstall(opts)

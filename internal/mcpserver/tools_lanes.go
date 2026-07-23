@@ -7,7 +7,7 @@ import (
 )
 
 func registerLanes(srv *mcp.Server, s *Server) {
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "list_lanes",
 		Description: "List the lanes (swimlanes) on a board. Lanes are read-only in the Favro API and cannot be created, renamed, or deleted. Use a returned lane_id as the lane argument to create_card/update_card to place a card in a specific lane. A board without lanes enabled returns an empty list.",
 	}, s.listLanes)

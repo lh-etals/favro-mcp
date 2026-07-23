@@ -9,17 +9,17 @@ import (
 type noArgs struct{}
 
 func registerOrganizations(srv *mcp.Server, s *Server) {
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "list_organizations",
 		Description: "List all organizations accessible to the authenticated user. Returns each organization's ID, name, and member count. Use set_organization to select one as the active organization.",
 	}, s.listOrganizations)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "get_current_organization",
 		Description: "Get details of the currently selected organization. Returns a message if none is selected.",
 	}, s.getCurrentOrganization)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "set_organization",
 		Description: "Select an organization (by ID or name) as the active organization for subsequent operations.",
 	}, s.setOrganization)
