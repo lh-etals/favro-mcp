@@ -86,17 +86,37 @@ func jsonResult(v any, err error) (*mcp.CallToolResult, any, error) {
 	}, nil, nil
 }
 
-// errorResult builds a clean MCP error result: {"error":{"kind","status","message"}}.
+// errorResult builds a clean MCP error result: YAML frontmatter
+// ({error: {kind, status, message}}) + a short Markdown hint body.
 func errorResult(err error) *mcp.CallToolResult {
 	kind, status := classifyError(err)
-	body := map[string]any{"error": map[string]any{"kind": kind, "message": err.Error()}}
-	if status > 0 {
-		body["error"] = map[string]any{"kind": kind, "status": status, "message": err.Error()}
-	}
-	b, _ := json.Marshal(body)
+	front := map[string]any{"error": errorYAML{Kind: kind, Status: status, Message: err.Error()}}
 	return &mcp.CallToolResult{
 		IsError: true,
-		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+		Content: []mcp.Content{&mcp.TextContent{Text: rendered{front: front, body: errorHint(kind)}.String()}},
+	}
+}
+
+type errorYAML struct {
+	Kind    string `yaml:"kind"`
+	Status  int    `yaml:"status,omitempty"`
+	Message string `yaml:"message"`
+}
+
+func errorHint(kind string) string {
+	switch kind {
+	case "not_found":
+		return "Nothing matched that identifier. Call the relevant `list_*` tool to see valid IDs and names."
+	case "authentication":
+		return "Favro rejected the credentials — run `favro-mcp login`."
+	case "forbidden":
+		return "Favro denied access to that resource."
+	case "rate_limited":
+		return "Favro rate-limited the request; retry shortly."
+	case "ambiguous":
+		return "Multiple matches — reuse one of the IDs listed above."
+	default:
+		return ""
 	}
 }
 

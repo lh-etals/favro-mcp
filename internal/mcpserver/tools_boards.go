@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -65,21 +66,29 @@ func (s *Server) listBoards(_ context.Context, _ *mcp.CallToolRequest, args list
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	out := make([]map[string]any, 0, len(boards))
+	rows := make([]boardRow, 0, len(boards))
 	for _, b := range boards {
-		out = append(out, map[string]any{
-			"widget_common_id": b.WidgetCommonID,
-			"name":             b.Name,
-			"type":             b.Type,
-			"archived":         b.Archived,
-			"collection_ids":   b.CollectionIDs,
-		})
+		rows = append(rows, boardRow{Name: b.Name, ID: b.WidgetCommonID, Type: b.Type, Archived: b.Archived})
 	}
-	collectionFilter := ""
-	if args.Collection != nil {
-		collectionFilter = *args.Collection
+	front := map[string]any{"boards": rows}
+	where := ""
+	if args.Collection != nil && *args.Collection != "" {
+		front["collection"] = *args.Collection
+		where = " in " + *args.Collection
 	}
-	return jsonResult(map[string]any{"boards": out, "collection_filter": collectionFilter}, nil)
+	body := fmt.Sprintf("%d board(s)%s.", len(rows), where)
+	if where == "" {
+		body += " Pass collection=<name> to list boards inside a folder."
+	}
+	return textResult(rendered{front: front, body: body}.String())
+}
+
+// boardRow is one row of list_boards output (name-first, stable id reference).
+type boardRow struct {
+	Name     string `yaml:"name"`
+	ID       string `yaml:"id"`
+	Type     string `yaml:"type,omitempty"`
+	Archived bool   `yaml:"archived,omitempty"`
 }
 
 type getBoardArgs struct {

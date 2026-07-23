@@ -37,10 +37,11 @@ func registerCards(srv *mcp.Server, s *Server) {
 // --- list_cards ------------------------------------------------------------
 
 type listCardsArgs struct {
-	Board    string   `json:"board" jsonschema:"The board's widget_common_id, name, or ID"`
-	Column   *string  `json:"column,omitempty" jsonschema:"Optional column ID or name to filter by"`
-	Archived *bool    `json:"archived,omitempty" jsonschema:"Filter by archived status: true=only archived, false=only non-archived, omit=all"`
-	Page     int      `json:"page,omitempty" jsonschema:"Page number (0-indexed, default 0)"`
+	Board    string  `json:"board" jsonschema:"The board's widget_common_id, name, or ID"`
+	Column   *string `json:"column,omitempty" jsonschema:"Optional column ID or name to filter by"`
+	Archived *bool   `json:"archived,omitempty" jsonschema:"Filter by archived status: true=only archived, false=only non-archived, omit=all"`
+	Query    *string `json:"query,omitempty" jsonschema:"Case-insensitive substring filter on card name (client-side search)"`
+	Page     int     `json:"page,omitempty" jsonschema:"Page number (0-indexed, default 0)"`
 }
 
 func (s *Server) listCards(_ context.Context, _ *mcp.CallToolRequest, args listCardsArgs) (*mcp.CallToolResult, any, error) {
@@ -71,23 +72,46 @@ func (s *Server) listCards(_ context.Context, _ *mcp.CallToolRequest, args listC
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	out := make([]map[string]any, 0, len(cards))
+	// Client-side name search (Favro has no server-side text search).
+	query := ""
+	if args.Query != nil {
+		query = strings.ToLower(strings.TrimSpace(*args.Query))
+	}
+	rows := make([]cardRow, 0, len(cards))
 	for _, c := range cards {
-		out = append(out, map[string]any{
-			"card_id":       c.CardID,
-			"sequential_id": c.SequentialID,
-			"name":          c.Name,
-			"column_id":     strOr(c.ColumnID),
-			"tags":          c.Tags,
-			"archived":      c.Archived,
+		if query != "" && !strings.Contains(strings.ToLower(c.Name), query) {
+			continue
+		}
+		colID := strOr(c.ColumnID)
+		rows = append(rows, cardRow{
+			Seq: c.SequentialID, Name: c.Name, ID: c.CardID,
+			Column: colID, Tags: c.Tags, Archived: c.Archived,
 		})
 	}
-	return jsonResult(map[string]any{
-		"cards":         out,
-		"page":          args.Page,
-		"total_pages":   totalPages,
-		"cards_on_page": len(out),
-	}, nil)
+	front := map[string]any{
+		"board": boardID.Name,
+		"page":  args.Page,
+		"pages": totalPages,
+		"cards": rows,
+	}
+	if query != "" {
+		front["query"] = *args.Query
+	}
+	body := fmt.Sprintf("%d card(s) (page %d/%d).", len(rows), args.Page, totalPages)
+	if totalPages > 1 {
+		body += fmt.Sprintf(" Next: page=%d.", args.Page+1)
+	}
+	return textResult(rendered{front: front, body: body}.String())
+}
+
+// cardRow is one row of list_cards output.
+type cardRow struct {
+	Seq     int      `yaml:"seq"`
+	Name    string   `yaml:"name"`
+	ID      string   `yaml:"id"`
+	Column  string   `yaml:"column,omitempty"`
+	Tags    []string `yaml:"tags,omitempty"`
+	Archived bool    `yaml:"archived,omitempty"`
 }
 
 // --- list_custom_fields ----------------------------------------------------
@@ -338,13 +362,13 @@ func (s *Server) createCard(_ context.Context, _ *mcp.CallToolRequest, args crea
 			return jsonResult(nil, err)
 		}
 	}
-	return jsonResult(map[string]any{
-		"message":         fmt.Sprintf("Created card #%d: %s", card.SequentialID, card.Name),
-		"card_id":         card.CardID,
-		"card_common_id":  card.CardCommonID,
-		"sequential_id":   card.SequentialID,
-		"name":            card.Name,
-	}, nil)
+	prose := fmt.Sprintf("Created card **#%d %s**.", card.SequentialID, card.Name)
+	return textResult(mdMessage(prose, map[string]any{
+		"card_id":        card.CardID,
+		"card_common_id": card.CardCommonID,
+		"sequential_id":  card.SequentialID,
+		"board":          boardID,
+	}))
 }
 
 // --- update_card -----------------------------------------------------------
