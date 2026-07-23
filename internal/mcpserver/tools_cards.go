@@ -142,7 +142,7 @@ func (s *Server) listCustomFields(_ context.Context, _ *mcp.CallToolRequest, arg
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	out := make([]map[string]any, 0, len(fields))
+	out := make([]customFieldRow, 0, len(fields))
 	for _, f := range fields {
 		name, _ := f["name"].(string)
 		ftype, _ := f["type"].(string)
@@ -156,13 +156,31 @@ func (s *Server) listCustomFields(_ context.Context, _ *mcp.CallToolRequest, arg
 				continue
 			}
 		}
-		out = append(out, map[string]any{
-			"customFieldId": f["customFieldId"],
-			"name":          name,
-			"type":          ftype,
-		})
+		out = append(out, customFieldRow{ID: asString(f["customFieldId"]), Name: name, Type: ftype})
 	}
-	return jsonResult(map[string]any{"custom_fields": out, "count": len(out)}, nil)
+	return textResult(rendered{front: listCustomFieldsFront{CustomFields: out}, body: fmt.Sprintf("%d custom field(s).", len(out))}.String())
+}
+
+type listCustomFieldsFront struct {
+	CustomFields []customFieldRow `yaml:"custom_fields"`
+}
+
+type customFieldRow struct {
+	ID   string `yaml:"id"`
+	Name string `yaml:"name"`
+	Type string `yaml:"type,omitempty"`
+}
+
+// asString coerces an interface{from JSON} to a string best-effort.
+func asString(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case fmt.Stringer:
+		return x.String()
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 // --- get_card_details ------------------------------------------------------
@@ -194,27 +212,17 @@ func (s *Server) getCardDetails(_ context.Context, _ *mcp.CallToolRequest, args 
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	tasklistsData := make([]map[string]any, 0, len(tasklists))
+	type tlData struct {
+		tl    favro.TaskList
+		tasks []favro.Task
+	}
+	tls := make([]tlData, 0, len(tasklists))
 	for _, tl := range tasklists {
 		tasks, err := client.GetTasks(c.CardCommonID, tl.TaskListID)
 		if err != nil {
 			return jsonResult(nil, err)
 		}
-		taskRows := make([]map[string]any, 0, len(tasks))
-		for _, t := range tasks {
-			taskRows = append(taskRows, map[string]any{
-				"task_id":    t.TaskID,
-				"name":       t.Name,
-				"completed":  t.Completed,
-				"position":   t.Position,
-			})
-		}
-		tasklistsData = append(tasklistsData, map[string]any{
-			"tasklist_id": tl.TaskListID,
-			"name":        tl.Name,
-			"position":    tl.Position,
-			"tasks":       taskRows,
-		})
+		tls = append(tls, tlData{tl: tl, tasks: tasks})
 	}
 
 	// Comments.
@@ -222,26 +230,137 @@ func (s *Server) getCardDetails(_ context.Context, _ *mcp.CallToolRequest, args 
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	commentsData := make([]map[string]any, 0, len(comments))
-	for _, cm := range comments {
-		lastUpd := ""
-		if cm.LastUpdated != nil {
-			lastUpd = *cm.LastUpdated
+
+	// Best-effort name resolution (fall back to IDs on any failure).
+	cardBoard := strOr(c.WidgetCommonID)
+	boardName, laneName, colName := cardBoard, strOr(c.LaneID), strOr(c.ColumnID)
+	if w, err := client.GetWidget(cardBoard); err == nil && w != nil {
+		boardName = w.Name
+		for _, l := range w.Lanes {
+			if l.LaneID == strOr(c.LaneID) {
+				laneName = l.Name
+				break
+			}
 		}
-		commentsData = append(commentsData, map[string]any{
-			"comment_id":    cm.CommentID,
-			"user_id":       cm.UserID,
-			"comment":       cm.Comment,
-			"created":       cm.Created,
-			"last_updated":  lastUpd,
-		})
+	}
+	if cols, err := client.GetColumns(cardBoard); err == nil {
+		for _, col := range cols {
+			if col.ColumnID == strOr(c.ColumnID) {
+				colName = col.Name
+				break
+			}
+		}
+	}
+	userNames := map[string]string{}
+	if users, err := client.GetUsers(); err == nil {
+		for _, u := range users {
+			userNames[u.UserID] = u.Name
+		}
+	}
+	tagNames := map[string]string{}
+	if tags, err := client.GetTags(); err == nil {
+		for _, t := range tags {
+			tagNames[t.TagID] = t.Name
+		}
 	}
 
-	result := cardToMap(c)
-	result["tasklists"] = tasklistsData
-	result["comments"] = commentsData
-	result["detailed_description"] = stripTasklistFromDescription(strOr(c.DetailedDescription), tasklistsData)
-	return jsonResult(result, nil)
+	// Build the Markdown body.
+	var b strings.Builder
+	fmt.Fprintf(&b, "# #%d %s\n\n", c.SequentialID, c.Name)
+	fmt.Fprintf(&b, "**Board:** %s  ·  **Column:** %s", boardName, colName)
+	if strOr(c.LaneID) != "" {
+		fmt.Fprintf(&b, "  ·  **Lane:** %s", laneName)
+	}
+	b.WriteString("\n")
+	status := "active"
+	if c.Archived {
+		status = "archived"
+	}
+	fmt.Fprintf(&b, "**Status:** %s", status)
+	if strOr(c.DueDate) != "" {
+		fmt.Fprintf(&b, "  ·  **Due:** %s", strOr(c.DueDate))
+	}
+	b.WriteString("\n")
+	if len(c.Assignments) > 0 {
+		names := make([]string, 0, len(c.Assignments))
+		for _, a := range c.Assignments {
+			if n := userNames[a.UserID]; n != "" {
+				names = append(names, n)
+			} else {
+				names = append(names, a.UserID)
+			}
+		}
+		fmt.Fprintf(&b, "**Assigned:** %s\n", strings.Join(names, ", "))
+	}
+	if len(c.Tags) > 0 {
+		names := make([]string, 0, len(c.Tags))
+		for _, t := range c.Tags {
+			if n := tagNames[t]; n != "" {
+				names = append(names, n)
+			} else {
+				names = append(names, t)
+			}
+		}
+		fmt.Fprintf(&b, "**Tags:** %s\n", strings.Join(names, ", "))
+	}
+	// Strip auto-appended tasklist checkboxes from the description.
+	stripInput := make([]map[string]any, 0, len(tls))
+	for _, d := range tls {
+		tasksArr := make([]map[string]any, 0, len(d.tasks))
+		for _, t := range d.tasks {
+			tasksArr = append(tasksArr, map[string]any{"name": t.Name})
+		}
+		stripInput = append(stripInput, map[string]any{"name": d.tl.Name, "tasks": tasksArr})
+	}
+	desc := stripTasklistFromDescription(strOr(c.DetailedDescription), stripInput)
+	if desc != "" {
+		fmt.Fprintf(&b, "\n## Description\n\n%s\n", desc)
+	}
+	if len(tls) > 0 {
+		b.WriteString("\n## Checklists\n")
+		for _, d := range tls {
+			done := 0
+			for _, t := range d.tasks {
+				if t.Completed {
+					done++
+				}
+			}
+			fmt.Fprintf(&b, "\n- **%s** (%d/%d)\n", d.tl.Name, done, len(d.tasks))
+			for _, t := range d.tasks {
+				box := "[ ]"
+				if t.Completed {
+					box = "[x]"
+				}
+				fmt.Fprintf(&b, "  - %s %s\n", box, t.Name)
+			}
+		}
+	}
+	if len(comments) > 0 {
+		b.WriteString("\n## Comments\n")
+		for _, cm := range comments {
+			who := cm.UserID
+			if n := userNames[cm.UserID]; n != "" {
+				who = n
+			}
+			fmt.Fprintf(&b, "\n- **%s** (%s): %s\n", who, cm.Created, cm.Comment)
+		}
+	}
+
+	front := cardDetailFront{
+		CardID: c.CardID, CardCommonID: c.CardCommonID, Seq: c.SequentialID,
+		Board: boardName, BoardID: cardBoard, Column: colName,
+	}
+	return textResult(rendered{front: front, body: b.String()}.String())
+}
+
+// cardDetailFront carries the stable identifiers for get_card_details.
+type cardDetailFront struct {
+	CardID       string `yaml:"card_id"`
+	CardCommonID string `yaml:"card_common_id"`
+	Seq          int    `yaml:"seq"`
+	Board        string `yaml:"board"`
+	BoardID      string `yaml:"board_id"`
+	Column       string `yaml:"column,omitempty"`
 }
 
 // --- add_comment -----------------------------------------------------------
@@ -272,13 +391,12 @@ func (s *Server) addComment(_ context.Context, _ *mcp.CallToolRequest, args addC
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{
-		"message":         "Comment added",
-		"comment_id":      created.CommentID,
-		"card_common_id":  created.CardCommonID,
-		"user_id":         created.UserID,
-		"created":         created.Created,
-	}, nil)
+	return textResult(mdMessage("Comment added.", map[string]any{
+		"comment_id":     created.CommentID,
+		"card_common_id": created.CardCommonID,
+		"user_id":        created.UserID,
+		"created":        created.Created,
+	}))
 }
 
 // --- create_card -----------------------------------------------------------
@@ -494,12 +612,10 @@ func (s *Server) updateCard(_ context.Context, _ *mcp.CallToolRequest, args upda
 		messages = append(messages, "Created task: "+newTask.Name)
 	}
 
-	return jsonResult(map[string]any{
-		"message":      strings.Join(messages, "; "),
-		"card_id":      updated.CardID,
+	return textResult(mdMessage(strings.Join(messages, "; "), map[string]any{
+		"card_id":       updated.CardID,
 		"sequential_id": updated.SequentialID,
-		"name":         updated.Name,
-	}, nil)
+	}))
 }
 
 // --- move_card -------------------------------------------------------------
@@ -620,16 +736,23 @@ func (s *Server) moveCard(_ context.Context, _ *mcp.CallToolRequest, args moveCa
 		laneIDVal = ln.LaneID
 		laneNameVal = ln.Name
 	}
-	result := map[string]any{
-		"message":          fmt.Sprintf("Moved card '%s' to %s", updated.Name, location),
+	ids := map[string]any{
 		"card_id":          updated.CardID,
 		"widget_common_id": targetBoard,
-		"column_id":        colIDVal,
-		"column_name":      colNameVal,
-		"lane_id":          laneIDVal,
-		"lane_name":        laneNameVal,
 	}
-	return jsonResult(result, nil)
+	if colIDVal != nil {
+		ids["column_id"] = colIDVal
+	}
+	if colNameVal != nil {
+		ids["column_name"] = colNameVal
+	}
+	if laneIDVal != nil {
+		ids["lane_id"] = laneIDVal
+	}
+	if laneNameVal != nil {
+		ids["lane_name"] = laneNameVal
+	}
+	return textResult(mdMessage(fmt.Sprintf("Moved card **%s** to %s.", updated.Name, location), ids))
 }
 
 // --- assign_card -----------------------------------------------------------
@@ -674,12 +797,10 @@ func (s *Server) assignCard(_ context.Context, _ *mcp.CallToolRequest, args assi
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{
-		"message":   fmt.Sprintf("%s %s %s card '%s'", action, u.Name, prep, updated.Name),
-		"card_id":   updated.CardID,
-		"user_id":   u.UserID,
-		"user_name": u.Name,
-	}, nil)
+	return textResult(mdMessage(fmt.Sprintf("%s **%s** %s card **%s**.", action, u.Name, prep, updated.Name), map[string]any{
+		"card_id": updated.CardID,
+		"user_id": u.UserID,
+	}))
 }
 
 // --- tag_card --------------------------------------------------------------
@@ -724,12 +845,10 @@ func (s *Server) tagCard(_ context.Context, _ *mcp.CallToolRequest, args tagCard
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{
-		"message":   fmt.Sprintf("%s tag '%s' %s card '%s'", action, t.Name, prep, updated.Name),
-		"card_id":   updated.CardID,
-		"tag_id":    t.TagID,
-		"tag_name":  t.Name,
-	}, nil)
+	return textResult(mdMessage(fmt.Sprintf("%s tag **%s** %s card **%s**.", action, t.Name, prep, updated.Name), map[string]any{
+		"card_id": updated.CardID,
+		"tag_id":  t.TagID,
+	}))
 }
 
 // --- delete_card -----------------------------------------------------------
@@ -761,10 +880,7 @@ func (s *Server) deleteCard(_ context.Context, _ *mcp.CallToolRequest, args dele
 	if err := client.DeleteCard(cardID, args.Everywhere); err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{
-		"message": "Deleted card: " + name,
-		"card_id": cardID,
-	}, nil)
+	return textResult(mdMessage(fmt.Sprintf("Deleted card **%s**.", name), map[string]any{"card_id": cardID}))
 }
 
 // --- upload_attachment -----------------------------------------------------
@@ -806,12 +922,11 @@ func (s *Server) uploadAttachment(_ context.Context, _ *mcp.CallToolRequest, arg
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{
-		"message":  fmt.Sprintf("Uploaded '%s' to card '%s'", att.Name, c.Name),
+	return textResult(mdMessage(fmt.Sprintf("Uploaded **%s** to card **%s**.", att.Name, c.Name), map[string]any{
 		"name":     att.Name,
 		"file_url": att.FileURL,
 		"card_id":  c.CardID,
-	}, nil)
+	}))
 }
 
 // --- delete_comment --------------------------------------------------------
@@ -831,7 +946,7 @@ func (s *Server) deleteComment(_ context.Context, _ *mcp.CallToolRequest, args d
 	if err := client.DeleteComment(args.CommentID); err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{"message": "Deleted comment: " + args.CommentID, "comment_id": args.CommentID}, nil)
+	return textResult(mdMessage("Deleted comment.", map[string]any{"comment_id": args.CommentID}))
 }
 
 // --- delete_task -----------------------------------------------------------
@@ -851,7 +966,7 @@ func (s *Server) deleteTask(_ context.Context, _ *mcp.CallToolRequest, args dele
 	if err := client.DeleteTask(args.TaskID); err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{"message": "Deleted task: " + args.TaskID, "task_id": args.TaskID}, nil)
+	return textResult(mdMessage("Deleted task.", map[string]any{"task_id": args.TaskID}))
 }
 
 // --- delete_tasklist -------------------------------------------------------
@@ -871,7 +986,7 @@ func (s *Server) deleteTasklist(_ context.Context, _ *mcp.CallToolRequest, args 
 	if err := client.DeleteTasklist(args.TasklistID); err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{"message": "Deleted task list: " + args.TasklistID, "tasklist_id": args.TasklistID}, nil)
+	return textResult(mdMessage("Deleted task list.", map[string]any{"tasklist_id": args.TasklistID}))
 }
 
 // --- remove_attachment -----------------------------------------------------
@@ -901,9 +1016,8 @@ func (s *Server) removeAttachment(_ context.Context, _ *mcp.CallToolRequest, arg
 	if _, err := client.UpdateCard(favro.UpdateCardOpts{CardID: c.CardID, RemoveAttachments: []string{args.FileURL}}); err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{
-		"message":  fmt.Sprintf("Removed attachment from card '%s'", c.Name),
+	return textResult(mdMessage(fmt.Sprintf("Removed attachment from card **%s**.", c.Name), map[string]any{
 		"card_id":  c.CardID,
 		"file_url": args.FileURL,
-	}, nil)
+	}))
 }

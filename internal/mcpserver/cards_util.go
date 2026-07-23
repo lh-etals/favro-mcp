@@ -2,64 +2,11 @@ package mcpserver
 
 import (
 	"strings"
-
-	"github.com/lh-etals/favro-mcp/internal/favro"
 )
 
-// cardToMap renders a Card as the JSON object returned by card-detail tools.
-func cardToMap(c *favro.Card) map[string]any {
-	assignments := make([]map[string]any, 0, len(c.Assignments))
-	for _, a := range c.Assignments {
-		assignments = append(assignments, map[string]any{"user_id": a.UserID, "completed": a.Completed})
-	}
-	customFields := make([]map[string]any, 0, len(c.CustomFields))
-	for _, cf := range c.CustomFields {
-		cfMap := map[string]any{
-			"custom_field_id": cf.CustomFieldID,
-			"value":           cf.Value,
-		}
-		if cf.Total != nil {
-			cfMap["total"] = *cf.Total
-		}
-		if cf.Link != nil {
-			cfMap["link"] = cf.Link
-		}
-		if cf.Members != nil {
-			cfMap["members"] = cf.Members
-		}
-		if cf.Color != nil {
-			cfMap["color"] = *cf.Color
-		}
-		customFields = append(customFields, cfMap)
-	}
-	var timeOnBoard any
-	if c.TimeOnBoard != nil {
-		timeOnBoard = map[string]any{"time": c.TimeOnBoard.Time, "is_stopped": c.TimeOnBoard.IsStopped}
-	}
-	return map[string]any{
-		"card_id":              c.CardID,
-		"card_common_id":       c.CardCommonID,
-		"sequential_id":        c.SequentialID,
-		"name":                 c.Name,
-		"detailed_description": strOr(c.DetailedDescription),
-		"widget_common_id":     strOr(c.WidgetCommonID),
-		"column_id":            strOr(c.ColumnID),
-		"lane_id":              strOr(c.LaneID),
-		"tags":                 c.Tags,
-		"assignments":          assignments,
-		"start_date":           strOr(c.StartDate),
-		"due_date":             strOr(c.DueDate),
-		"archived":             c.Archived,
-		"tasks_done":           c.TasksDone,
-		"tasks_total":          c.TasksTotal,
-		"time_on_board":        timeOnBoard,
-		"time_on_columns":      c.TimeOnColumns,
-		"custom_fields":        customFields,
-	}
-}
-
 // stripTasklistFromDescription removes the trailing tasklist checkbox lines that
-// Favro auto-appends to a card's detailedDescription.
+// Favro auto-appends to a card's detailedDescription. tasklists is a list of
+// maps each with "name" and "tasks" ([]map[string]any with "name").
 func stripTasklistFromDescription(description string, tasklists []map[string]any) string {
 	if description == "" || len(tasklists) == 0 {
 		return description

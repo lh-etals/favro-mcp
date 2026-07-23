@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -34,20 +35,27 @@ func (s *Server) listOrganizations(_ context.Context, _ *mcp.CallToolRequest, _ 
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	out := make([]map[string]any, 0, len(orgs))
+	rows := make([]orgRow, 0, len(orgs))
 	for _, o := range orgs {
-		out = append(out, map[string]any{
-			"organization_id": o.OrganizationID,
-			"name":            o.Name,
-			"member_count":    len(o.SharedToUsers),
-		})
+		rows = append(rows, orgRow{Name: o.Name, ID: o.OrganizationID, Members: len(o.SharedToUsers)})
 	}
-	return jsonResult(map[string]any{"organizations": out}, nil)
+	return textResult(rendered{front: listOrgsFront{Organizations: rows}, body: fmt.Sprintf("%d organization(s).", len(rows))}.String())
+}
+
+// listOrgsFront is the ordered frontmatter for list_organizations.
+type listOrgsFront struct {
+	Organizations []orgRow `yaml:"organizations"`
+}
+
+type orgRow struct {
+	Name    string `yaml:"name"`
+	ID      string `yaml:"id"`
+	Members int    `yaml:"members,omitempty"`
 }
 
 func (s *Server) getCurrentOrganization(_ context.Context, _ *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 	if s.session.Org() == "" {
-		return jsonResult(map[string]any{"message": "No organization selected. Use set_organization tool first."}, nil)
+		return textResult("No organization selected. Use the `set_organization` tool first.")
 	}
 	client, err := s.client()
 	if err != nil {
@@ -57,11 +65,7 @@ func (s *Server) getCurrentOrganization(_ context.Context, _ *mcp.CallToolReques
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{
-		"organization_id": org.OrganizationID,
-		"name":            org.Name,
-		"member_count":    len(org.SharedToUsers),
-	}, nil)
+	return textResult(rendered{front: listOrgsFront{Organizations: []orgRow{{Name: org.Name, ID: org.OrganizationID, Members: len(org.SharedToUsers)}}}, body: fmt.Sprintf("Active organization: **%s**.", org.Name)}.String())
 }
 
 type setOrganizationArgs struct {
@@ -78,9 +82,5 @@ func (s *Server) setOrganization(_ context.Context, _ *mcp.CallToolRequest, args
 		return jsonResult(nil, err)
 	}
 	s.session.SetOrg(org.OrganizationID)
-	return jsonResult(map[string]any{
-		"message":         "Selected organization: " + org.Name,
-		"organization_id": org.OrganizationID,
-		"name":            org.Name,
-	}, nil)
+	return textResult(mdMessage(fmt.Sprintf("Selected organization **%s**.", org.Name), map[string]any{"organization_id": org.OrganizationID}))
 }

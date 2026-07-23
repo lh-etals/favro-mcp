@@ -57,9 +57,7 @@ func (s *Server) listBoards(_ context.Context, _ *mcp.CallToolRequest, args list
 			}
 		}
 		if collectionID == "" {
-			return jsonResult(map[string]any{
-				"error": "Collection '" + *args.Collection + "' not found. Use list_collections to see available collections.",
-			}, nil)
+			return jsonResult(nil, &notFoundError{entityType: "collection", identifier: *args.Collection})
 		}
 	}
 	boards, err := client.GetWidgets(collectionID, false)
@@ -109,16 +107,12 @@ func (s *Server) getBoard(_ context.Context, _ *mcp.CallToolRequest, args getBoa
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	detail, err := s.boardDetail(client, args.BoardID)
-	if err != nil {
-		return jsonResult(nil, err)
-	}
-	return jsonResult(detail, nil)
+	return jsonResult(s.boardDetail(client, args.BoardID))
 }
 
 func (s *Server) getCurrentBoard(_ context.Context, _ *mcp.CallToolRequest, _ noArgs) (*mcp.CallToolResult, any, error) {
 	if s.session.Board() == "" {
-		return jsonResult(map[string]any{"message": "No board selected. Use set_board tool first."}, nil)
+		return textResult("No board selected. Use the `set_board` tool first.")
 	}
 	if _, err := s.requireOrg(); err != nil {
 		return jsonResult(nil, err)
@@ -127,11 +121,7 @@ func (s *Server) getCurrentBoard(_ context.Context, _ *mcp.CallToolRequest, _ no
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	detail, err := s.boardDetail(client, s.session.Board())
-	if err != nil {
-		return jsonResult(nil, err)
-	}
-	return jsonResult(detail, nil)
+	return jsonResult(s.boardDetail(client, s.session.Board()))
 }
 
 type setBoardArgs struct {
@@ -151,49 +141,42 @@ func (s *Server) setBoard(_ context.Context, _ *mcp.CallToolRequest, args setBoa
 		return jsonResult(nil, err)
 	}
 	s.session.SetBoard(w.WidgetCommonID)
-	return jsonResult(map[string]any{
-		"message":          "Selected board: " + w.Name,
-		"widget_common_id": w.WidgetCommonID,
-		"name":             w.Name,
-		"type":             w.Type,
-	}, nil)
+	return textResult(mdMessage(fmt.Sprintf("Selected board **%s** (%s).", w.Name, w.Type), map[string]any{"widget_common_id": w.WidgetCommonID}))
 }
 
-// boardDetail builds the common board+columns+lanes payload.
-func (s *Server) boardDetail(client *favro.Client, widgetCommonID string) (map[string]any, error) {
+// boardDetail builds the board detail as frontmatter + Markdown body.
+func (s *Server) boardDetail(client *favro.Client, widgetCommonID string) (string, error) {
 	board, err := client.GetWidget(widgetCommonID)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	columns, err := client.GetColumns(widgetCommonID)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	sort.SliceStable(columns, func(i, j int) bool { return columns[i].Position < columns[j].Position })
-	cols := make([]map[string]any, 0, len(columns))
-	for _, c := range columns {
-		cols = append(cols, map[string]any{
-			"column_id":  c.ColumnID,
-			"name":       c.Name,
-			"position":   c.Position,
-			"card_count": c.CardCount,
-		})
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Columns\n\n")
+	if len(columns) == 0 {
+		b.WriteString("(none)\n")
 	}
-	lanes := make([]map[string]any, 0, len(board.Lanes))
-	for _, l := range board.Lanes {
-		lanes = append(lanes, map[string]any{"lane_id": l.LaneID, "name": l.Name})
+	for i, c := range columns {
+		fmt.Fprintf(&b, "%d. **%s** · %s (%d cards)\n", i+1, c.Name, c.ColumnID, c.CardCount)
 	}
-	color := ""
-	if board.Color != nil {
-		color = *board.Color
+	if len(board.Lanes) > 0 {
+		b.WriteString("\n## Lanes\n\n")
+		for _, l := range board.Lanes {
+			fmt.Fprintf(&b, "- **%s** · %s\n", l.Name, l.LaneID)
+		}
 	}
-	return map[string]any{
-		"widget_common_id": board.WidgetCommonID,
-		"name":             board.Name,
-		"type":             board.Type,
-		"archived":         board.Archived,
-		"color":            color,
-		"columns":          cols,
-		"lanes":            lanes,
-	}, nil
+	front := boardDetailFront{ID: board.WidgetCommonID, Name: board.Name, Type: board.Type, Archived: board.Archived}
+	return rendered{front: front, body: b.String()}.String(), nil
+}
+
+type boardDetailFront struct {
+	ID       string `yaml:"id"`
+	Name     string `yaml:"name"`
+	Type     string `yaml:"type,omitempty"`
+	Archived bool   `yaml:"archived,omitempty"`
 }

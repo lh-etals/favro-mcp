@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -36,9 +37,22 @@ func (s *Server) listLanes(_ context.Context, _ *mcp.CallToolRequest, args listL
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	out := make([]map[string]any, 0, len(lanes))
+	out := make([]laneRow, 0, len(lanes))
 	for _, l := range lanes {
-		out = append(out, map[string]any{"lane_id": l.LaneID, "name": l.Name})
+		out = append(out, laneRow{Name: l.Name, ID: l.LaneID})
 	}
-	return jsonResult(map[string]any{"lanes": out}, nil)
+	body := fmt.Sprintf("%d lane(s).", len(out))
+	if len(out) == 0 {
+		body = "This board has no lanes (swimlanes disabled)."
+	}
+	return textResult(rendered{front: listLanesFront{Lanes: out}, body: body}.String())
+}
+
+type listLanesFront struct {
+	Lanes []laneRow `yaml:"lanes"`
+}
+
+type laneRow struct {
+	Name string `yaml:"name"`
+	ID   string `yaml:"id"`
 }

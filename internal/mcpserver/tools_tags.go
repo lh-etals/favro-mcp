@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -25,17 +26,23 @@ func (s *Server) listTags(_ context.Context, _ *mcp.CallToolRequest, _ noArgs) (
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	out := make([]map[string]any, 0, len(tags))
+	out := make([]tagRow, 0, len(tags))
 	for _, t := range tags {
 		color := ""
 		if t.Color != nil {
 			color = *t.Color
 		}
-		out = append(out, map[string]any{
-			"tag_id": t.TagID,
-			"name":   t.Name,
-			"color":  color,
-		})
+		out = append(out, tagRow{Name: t.Name, ID: t.TagID, Color: color})
 	}
-	return jsonResult(map[string]any{"tags": out, "count": len(out)}, nil)
+	return textResult(rendered{front: listTagsFront{Tags: out}, body: fmt.Sprintf("%d tag(s).", len(out))}.String())
+}
+
+type listTagsFront struct {
+	Tags []tagRow `yaml:"tags"`
+}
+
+type tagRow struct {
+	Name  string `yaml:"name"`
+	ID    string `yaml:"id"`
+	Color string `yaml:"color,omitempty"`
 }

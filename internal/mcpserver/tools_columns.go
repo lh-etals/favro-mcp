@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -51,16 +52,22 @@ func (s *Server) listColumns(_ context.Context, _ *mcp.CallToolRequest, args lis
 		return jsonResult(nil, err)
 	}
 	sort.SliceStable(columns, func(i, j int) bool { return columns[i].Position < columns[j].Position })
-	out := make([]map[string]any, 0, len(columns))
+	out := make([]columnRow, 0, len(columns))
 	for _, c := range columns {
-		out = append(out, map[string]any{
-			"column_id":  c.ColumnID,
-			"name":       c.Name,
-			"position":   c.Position,
-			"card_count": c.CardCount,
-		})
+		out = append(out, columnRow{Name: c.Name, ID: c.ColumnID, Position: c.Position, Cards: c.CardCount})
 	}
-	return jsonResult(map[string]any{"columns": out}, nil)
+	return textResult(rendered{front: listColumnsFront{Columns: out}, body: fmt.Sprintf("%d column(s).", len(out))}.String())
+}
+
+type listColumnsFront struct {
+	Columns []columnRow `yaml:"columns"`
+}
+
+type columnRow struct {
+	Name     string  `yaml:"name"`
+	ID       string  `yaml:"id"`
+	Position float64 `yaml:"position,omitempty"`
+	Cards    int     `yaml:"cards,omitempty"`
 }
 
 type createColumnArgs struct {
@@ -88,12 +95,7 @@ func (s *Server) createColumn(_ context.Context, _ *mcp.CallToolRequest, args cr
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{
-		"message":   "Created column: " + col.Name,
-		"column_id": col.ColumnID,
-		"name":      col.Name,
-		"position":  col.Position,
-	}, nil)
+	return textResult(mdMessage(fmt.Sprintf("Created column **%s**.", col.Name), map[string]any{"column_id": col.ColumnID, "position": col.Position}))
 }
 
 type renameColumnArgs struct {
@@ -125,11 +127,7 @@ func (s *Server) renameColumn(_ context.Context, _ *mcp.CallToolRequest, args re
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{
-		"message":   "Renamed column to: " + updated.Name,
-		"column_id": updated.ColumnID,
-		"name":      updated.Name,
-	}, nil)
+	return textResult(mdMessage(fmt.Sprintf("Renamed column to **%s**.", updated.Name), map[string]any{"column_id": updated.ColumnID}))
 }
 
 type moveColumnArgs struct {
@@ -162,11 +160,7 @@ func (s *Server) moveColumn(_ context.Context, _ *mcp.CallToolRequest, args move
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{
-		"message":   "Moved column '" + updated.Name + "' to position " + itoa(args.Position),
-		"column_id": updated.ColumnID,
-		"position":  updated.Position,
-	}, nil)
+	return textResult(mdMessage(fmt.Sprintf("Moved column **%s** to position %d.", updated.Name, args.Position), map[string]any{"column_id": updated.ColumnID, "position": updated.Position}))
 }
 
 type deleteColumnArgs struct {
@@ -196,8 +190,5 @@ func (s *Server) deleteColumn(_ context.Context, _ *mcp.CallToolRequest, args de
 	if err := client.DeleteColumn(col.ColumnID); err != nil {
 		return jsonResult(nil, err)
 	}
-	return jsonResult(map[string]any{
-		"message":   "Deleted column: " + col.Name,
-		"column_id": col.ColumnID,
-	}, nil)
+	return textResult(mdMessage(fmt.Sprintf("Deleted column **%s**.", col.Name), map[string]any{"column_id": col.ColumnID}))
 }

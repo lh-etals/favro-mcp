@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -29,20 +30,26 @@ func (s *Server) listUsers(_ context.Context, _ *mcp.CallToolRequest, _ noArgs) 
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	out := make([]map[string]any, 0, len(users))
+	out := make([]userRow, 0, len(users))
 	for _, u := range users {
 		role := ""
 		if u.OrganizationRole != nil {
 			role = *u.OrganizationRole
 		}
-		out = append(out, map[string]any{
-			"user_id":            u.UserID,
-			"name":               u.Name,
-			"email":              u.Email,
-			"organization_role":  role,
-		})
+		out = append(out, userRow{Name: u.Name, ID: u.UserID, Email: u.Email, Role: role})
 	}
-	return jsonResult(map[string]any{"users": out, "count": len(out)}, nil)
+	return textResult(rendered{front: listUsersFront{Users: out}, body: fmt.Sprintf("%d user(s).", len(out))}.String())
+}
+
+type listUsersFront struct {
+	Users []userRow `yaml:"users"`
+}
+
+type userRow struct {
+	Name  string `yaml:"name"`
+	ID    string `yaml:"id"`
+	Email string `yaml:"email,omitempty"`
+	Role  string `yaml:"role,omitempty"`
 }
 
 type getUserArgs struct {
@@ -65,10 +72,8 @@ func (s *Server) getUser(_ context.Context, _ *mcp.CallToolRequest, args getUser
 	if u.OrganizationRole != nil {
 		role = *u.OrganizationRole
 	}
-	return jsonResult(map[string]any{
-		"user_id":            u.UserID,
-		"name":               u.Name,
-		"email":              u.Email,
-		"organization_role":  role,
-	}, nil)
+	return textResult(rendered{
+		front: listUsersFront{Users: []userRow{{Name: u.Name, ID: u.UserID, Email: u.Email, Role: role}}},
+		body:  fmt.Sprintf("User **%s** (%s).", u.Name, u.Email),
+	}.String())
 }

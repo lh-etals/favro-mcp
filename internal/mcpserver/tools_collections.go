@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -25,13 +26,22 @@ func (s *Server) listCollections(_ context.Context, _ *mcp.CallToolRequest, _ no
 	if err != nil {
 		return jsonResult(nil, err)
 	}
-	out := make([]map[string]any, 0, len(collections))
+	out := make([]collectionRow, 0, len(collections))
 	for _, c := range collections {
-		out = append(out, map[string]any{
-			"collection_id": c.CollectionID,
-			"name":          c.Name,
-			"archived":      c.Archived,
-		})
+		out = append(out, collectionRow{Name: c.Name, ID: c.CollectionID, Archived: c.Archived})
 	}
-	return jsonResult(map[string]any{"collections": out}, nil)
+	return textResult(rendered{
+		front: listCollectionsFront{Collections: out},
+		body:  fmt.Sprintf("%d collection(s). Pass collection=<name> to list_boards to see boards inside one.", len(out)),
+	}.String())
+}
+
+type listCollectionsFront struct {
+	Collections []collectionRow `yaml:"collections"`
+}
+
+type collectionRow struct {
+	Name     string `yaml:"name"`
+	ID       string `yaml:"id"`
+	Archived bool   `yaml:"archived,omitempty"`
 }
