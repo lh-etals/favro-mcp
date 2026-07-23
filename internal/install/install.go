@@ -1,11 +1,12 @@
 package install
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/lh-etals/favro-mcp/internal/credentials"
 )
 
 // Options controls install/uninstall behaviour.
@@ -127,32 +128,24 @@ func RunInstall(opts Options) error {
 		name = "favro"
 	}
 
-	email, token := opts.Email, opts.Token
+	// Credentials are managed centrally by `favro-mcp login` (read by the
+	// server at runtime), so client configs do not embed secrets by default.
+	// We only embed them when explicitly provided via flags or FAVRO_* env.
+	env := map[string]string{}
+	email := opts.Email
+	token := opts.Token
 	if email == "" {
 		email = os.Getenv("FAVRO_EMAIL")
 	}
 	if token == "" {
 		token = os.Getenv("FAVRO_API_TOKEN")
 	}
-	if email == "" || token == "" {
-		if opts.Yes {
-			fmt.Println("Note: FAVRO_EMAIL/FAVRO_API_TOKEN not provided; writing placeholders.")
-		} else {
-			email, token = promptCredentials(email, token)
-		}
-	}
-	env := map[string]string{}
-	if email != "" {
+	if email != "" && token != "" {
 		env["FAVRO_EMAIL"] = email
-	}
-	if token != "" {
 		env["FAVRO_API_TOKEN"] = token
-	}
-	if email == "" {
-		env["FAVRO_EMAIL"] = "your-email@example.com"
-	}
-	if token == "" {
-		env["FAVRO_API_TOKEN"] = "your-token-here"
+	} else if !credentials.Exists() {
+		fmt.Println("Note: Favro credentials not set. Run `favro-mcp login` (or export FAVRO_EMAIL/FAVRO_API_TOKEN) so the server can authenticate.")
+		fmt.Println()
 	}
 
 	target, err := serverTarget(env)
@@ -341,24 +334,4 @@ func describeRemove(r ApplyResult, dryRun bool) string {
 		return "not registered (nothing to remove)"
 	}
 	return describe(r)
-}
-
-func promptCredentials(email, token string) (string, string) {
-	r := bufio.NewReader(os.Stdin)
-	if email == "" {
-		fmt.Print("Favro email: ")
-		email, _ = r.ReadString('\n')
-		email = strings.TrimSpace(email)
-	}
-	if token == "" {
-		fmt.Print("Favro API token (input hidden): ")
-		if b, err := readPassword(int(os.Stdin.Fd())); err == nil {
-			token = strings.TrimSpace(string(b))
-		} else {
-			line, _ := r.ReadString('\n')
-			token = strings.TrimSpace(line)
-		}
-		fmt.Println()
-	}
-	return email, token
 }

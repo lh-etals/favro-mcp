@@ -9,16 +9,27 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/lh-etals/favro-mcp/internal/credentials"
+	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/lh-etals/favro-mcp/internal/install"
 	"github.com/lh-etals/favro-mcp/internal/mcpserver"
 )
 
 func main() {
-	// `install` and `uninstall` register favro-mcp with detected MCP clients.
-	// Any other invocation runs the stdio MCP server.
-	if len(os.Args) > 1 && (os.Args[1] == "install" || os.Args[1] == "uninstall") {
-		runInstaller(os.Args[1] == "uninstall", os.Args[2:])
-		return
+	// Subcommands: login (credentials), install/uninstall (register with AI
+	// clients). Any other invocation runs the stdio MCP server.
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "login":
+			runLogin(os.Args[2:])
+			return
+		case "install":
+			runInstaller(false, os.Args[2:])
+			return
+		case "uninstall":
+			runInstaller(true, os.Args[2:])
+			return
+		}
 	}
 
 	// Run the MCP server over stdio.
@@ -26,6 +37,36 @@ func main() {
 	defer stop()
 	if err := mcpserver.NewServer().Run(ctx); err != nil {
 		log.Fatalf("Server failed: %v", err)
+	}
+}
+
+// runLogin prompts for (or accepts via flags) the Favro email + API token,
+// stores them centrally, and verifies them against the Favro API.
+func runLogin(args []string) {
+	fs := flag.NewFlagSet("favro-mcp login", flag.ExitOnError)
+	email := fs.String("email", "", "Favro email (else prompted)")
+	token := fs.String("token", "", "Favro API token (else prompted, hidden)")
+	_ = fs.Parse(args)
+
+	e, t := *email, *token
+	if e == "" || t == "" {
+		var err error
+		e, t, err = credentials.PromptAndSave()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	} else if err := credentials.Save(e, t); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	// Verify against the live API so a typo doesn't silently break the server.
+	client := favro.NewClient(e, t, "")
+	if orgs, err := client.GetOrganizations(); err != nil {
+		fmt.Fprintf(os.Stderr, "Credentials saved to ~/.favro-mcp/credentials.json, but verification failed: %v\n", err)
+	} else {
+		fmt.Printf("Credentials verified - %d organization(s) accessible.\nSaved to ~/.favro-mcp/credentials.json\n", len(orgs))
 	}
 }
 

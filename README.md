@@ -50,6 +50,23 @@ terminal** afterward so `favro-mcp` is found.
 3. Go to **API Tokens** → **Create new token**
 4. **Copy the token** — you won't see it again.
 
+### Log in
+
+```
+favro-mcp login
+```
+
+Prompts for your Favro email and API token (the token is hidden while you
+paste it), stores them in `~/.favro-mcp/credentials.json` (mode `0600`), and
+verifies them against the Favro API. The server reads this file at startup, so
+your credentials live in one place instead of being copied into every client
+config. You only do this once.
+
+> Don't want a credential file? See **Manual configuration** below — you can put
+> `FAVRO_EMAIL`/`FAVRO_API_TOKEN` straight in a client's `env` block and skip
+> `login` entirely; the server honours those env vars (they take precedence over
+> the stored credentials).
+
 ### Register with your AI clients
 
 ```
@@ -58,9 +75,10 @@ favro-mcp install
 
 This scans your machine for MCP-capable clients (Claude Desktop, Claude Code,
 Cursor, Codex, Gemini CLI, Windsurf, Zed, Cline, Roo Code, Amazon Q, Continue),
-lets you pick which to wire up, and prompts for your Favro email + token.
-Each client's config is written **safely and idempotently** — your other
-servers are preserved, and re-running won't duplicate anything.
+and lets you pick which to wire up with an interactive checklist. Each client's
+config is written **safely and idempotently** — your other servers are
+preserved, and re-running won't duplicate anything. The one-line installer
+above runs `login` then `install` for you automatically.
 
 Flags:
 
@@ -69,15 +87,16 @@ Flags:
 | `--dry-run` | Show exactly what would change, write nothing |
 | `--yes` | Register with **all** detected clients, no prompts |
 | `--name <name>` | Server name written into configs (default `favro`) |
-| `--email <addr>` | Provide Favro email non-interactively |
-| `--token <tok>` | Provide Favro API token non-interactively |
+| `--email <addr>` | Embed this email into configs (instead of using `login`) |
+| `--token <tok>` | Embed this token into configs (instead of using `login`) |
 
 Remove it everywhere later with `favro-mcp uninstall`.
 
 ### Manual configuration
 
-Prefer to edit a client config by hand? Point it at the binary — the server
-reads `FAVRO_EMAIL` and `FAVRO_API_TOKEN` from its environment:
+Prefer to edit a client config by hand? Point it at the binary. Credentials in
+the config's `env` block are read directly by the server (and override any
+stored login):
 
 ```json
 {
@@ -92,6 +111,10 @@ reads `FAVRO_EMAIL` and `FAVRO_API_TOKEN` from its environment:
   }
 }
 ```
+
+Credential resolution order: **`env` block (or `FAVRO_EMAIL`/`FAVRO_API_TOKEN`
+environment variables) → `favro-mcp login` store**. If neither is present the
+server returns a clear error on first use.
 
 ---
 

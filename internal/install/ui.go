@@ -16,11 +16,6 @@ type choice struct {
 	checked bool
 }
 
-// readPassword reads a line from a raw-mode terminal without echoing it.
-func readPassword(fd int) ([]byte, error) {
-	return term.ReadPassword(fd)
-}
-
 // multiSelect shows an interactive checkbox list and returns the IDs of the
 // checked rows. Falls back to a plain numbered prompt when stdin is not a TTY
 // or raw mode is unavailable.

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lh-etals/favro-mcp/internal/credentials"
 	"github.com/lh-etals/favro-mcp/internal/favro"
 )
 
@@ -63,12 +64,24 @@ func (s *Session) effectiveBoard(board string) string {
 	return s.state.Board()
 }
 
-// newClient builds a Favro client from env credentials and the active org.
+// newClient builds a Favro client from credentials: FAVRO_EMAIL/FAVRO_API_TOKEN
+// env vars take precedence, otherwise the central store written by
+// `favro-mcp login` is used.
 func (s *Session) newClient() (*favro.Client, error) {
 	email := os.Getenv("FAVRO_EMAIL")
 	token := os.Getenv("FAVRO_API_TOKEN")
 	if email == "" || token == "" {
-		return nil, errors.New("FAVRO_EMAIL and FAVRO_API_TOKEN environment variables are required")
+		if e, t, err := credentials.Load(); err == nil {
+			if email == "" {
+				email = e
+			}
+			if token == "" {
+				token = t
+			}
+		}
+	}
+	if email == "" || token == "" {
+		return nil, errors.New("Favro credentials not configured. Run `favro-mcp login`, or set FAVRO_EMAIL and FAVRO_API_TOKEN")
 	}
 	return favro.NewClient(email, token, s.state.Org()), nil
 }
