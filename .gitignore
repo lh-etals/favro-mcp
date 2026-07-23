@@ -1,53 +1,16 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+# Go
+/bin/
+/favro-mcp
+/favro-mcp.exe
+*.exe
+*.test
+*.out
+/dist/
 
-# Virtual environments
-.venv/
-venv/
-ENV/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Environment
+# Environment / secrets (never commit)
 .env
 .env.local
+.mcp.json
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# mypy
-.mypy_cache/
-
-# ruff
-.ruff_cache/
-
-# uv
-uv.lock
-
-# Local MCP configuration (may contain credentials)
+# Local MCP config (may contain credentials)
 .mcp.json
