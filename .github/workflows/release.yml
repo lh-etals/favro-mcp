@@ -1,19 +1,43 @@
 name: release
 
+# Builds, tests, and publishes a release for all 6 OS/arch targets.
+#   - Reusable (workflow_call) so autorelease.yml can invoke it after tagging.
+#   - Also fires on a manual tag push (v*) or a manual dispatch.
 on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to build and release (without leading v)'
+        required: true
+        type: string
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Release tag (e.g. v0.7.0-go.1)'
+      version:
+        description: 'Version to build and release (without leading v)'
         required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: true
+      - run: go vet ./...
+      - run: go test ./...
+
   build:
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    needs: test
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -26,18 +50,16 @@ jobs:
           - { goos: windows, goarch: arm64 }
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
           cache: true
-
       - name: Resolve version
         id: ver
         run: |
-          if [ -n "${{ inputs.tag }}" ]; then echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT";
-          else echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"; fi
-
+          if [ -n "${{ inputs.version }}" ]; then V="${{ inputs.version }}"
+          else V="${GITHUB_REF_NAME#v}"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
       - name: Build
         env:
           CGO_ENABLED: '0'
@@ -47,35 +69,33 @@ jobs:
           ext=""; [ "$GOOS" = "windows" ] && ext=".exe"
           out="favro-mcp-${GOOS}-${GOARCH}${ext}"
           go build -trimpath \
-            -ldflags="-s -w -X github.com/lh-etals/favro-mcp/internal/mcpserver.Version=${{ steps.ver.outputs.tag }}" \
+            -ldflags="-s -w -X github.com/lh-etals/favro-mcp/internal/mcpserver.Version=${{ steps.ver.outputs.version }}" \
             -o "dist/$out" .
-
       - uses: actions/upload-artifact@v4
         with:
           name: favro-mcp-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
 
   release:
+    name: publish release
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-
-      - name: Resolve tag
+      - name: Resolve version
         id: ver
         run: |
-          if [ -n "${{ inputs.tag }}" ]; then echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT";
-          else echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"; fi
-
+          if [ -n "${{ inputs.version }}" ]; then V="${{ inputs.version }}"
+          else V="${GITHUB_REF_NAME#v}"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.ver.outputs.tag }}
-          name: ${{ steps.ver.outputs.tag }}
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: v${{ steps.ver.outputs.version }}
           files: dist/*
           generate_release_notes: true
