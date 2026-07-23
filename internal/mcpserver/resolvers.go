@@ -47,6 +47,22 @@ func isNotFound(err error) bool {
 	return errors.As(err, &nfe)
 }
 
+// isResolveMiss reports whether the "try as an ID" fast-path should give up and
+// fall through to a name search. Favro returns 404 for some endpoints and 403
+// (forbidden) for others when an ID is absent/inaccessible, so both mean "this
+// string is not a usable ID for me - try matching by name".
+func isResolveMiss(err error) bool {
+	var nfe *favro.NotFoundError
+	if errors.As(err, &nfe) {
+		return true
+	}
+	var auth *favro.AuthError
+	if errors.As(err, &auth) && auth.Status == 403 {
+		return true
+	}
+	return false
+}
+
 // Resolver wraps a Favro client and resolves IDs/names to entities.
 type Resolver struct {
 	c *favro.Client
@@ -82,7 +98,7 @@ func matchByName[T any](items []T, getID func(T) string, getName func(T) string,
 func (r *Resolver) Organization(idOrName string) (*favro.Organization, error) {
 	if org, err := r.c.GetOrganization(idOrName); err == nil && org != nil {
 		return org, nil
-	} else if err != nil && !isNotFound(err) {
+	} else if err != nil && !isResolveMiss(err) {
 		return nil, err
 	}
 	orgs, err := r.c.GetOrganizations()
@@ -97,7 +113,7 @@ func (r *Resolver) Organization(idOrName string) (*favro.Organization, error) {
 func (r *Resolver) Board(idOrName string) (*favro.Widget, error) {
 	if w, err := r.c.GetWidget(idOrName); err == nil && w != nil {
 		return w, nil
-	} else if err != nil && !isNotFound(err) {
+	} else if err != nil && !isResolveMiss(err) {
 		return nil, err
 	}
 	boards, err := r.c.GetWidgets("", false)
@@ -112,7 +128,7 @@ func (r *Resolver) Board(idOrName string) (*favro.Widget, error) {
 func (r *Resolver) Tag(idOrName string) (*favro.Tag, error) {
 	if t, err := r.c.GetTag(idOrName); err == nil && t != nil {
 		return t, nil
-	} else if err != nil && !isNotFound(err) {
+	} else if err != nil && !isResolveMiss(err) {
 		return nil, err
 	}
 	tags, err := r.c.GetTags()
@@ -127,7 +143,7 @@ func (r *Resolver) Tag(idOrName string) (*favro.Tag, error) {
 func (r *Resolver) Column(idOrName, boardID string) (*favro.Column, error) {
 	if col, err := r.c.GetColumn(idOrName); err == nil && col != nil {
 		return col, nil
-	} else if err != nil && !isNotFound(err) {
+	} else if err != nil && !isResolveMiss(err) {
 		return nil, err
 	}
 	if boardID == "" {
@@ -198,7 +214,7 @@ func (r *Resolver) User(idOrNameOrEmail string) (*favro.User, error) {
 func (r *Resolver) resolveUserByNameOrID(idOrName string) (*favro.User, error) {
 	if u, err := r.c.GetUser(idOrName); err == nil && u != nil {
 		return u, nil
-	} else if err != nil && !isNotFound(err) {
+	} else if err != nil && !isResolveMiss(err) {
 		return nil, err
 	}
 	users, err := r.c.GetUsers()
@@ -267,7 +283,7 @@ func (r *Resolver) Card(idOrName, boardID string) (*favro.Card, error) {
 	// Direct ID lookup.
 	if c, err := r.c.GetCard(idOrName); err == nil && c != nil {
 		return c, nil
-	} else if err != nil && !isNotFound(err) {
+	} else if err != nil && !isResolveMiss(err) {
 		return nil, err
 	}
 
