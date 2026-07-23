@@ -88,14 +88,14 @@ func (s *Server) listCards(_ context.Context, _ *mcp.CallToolRequest, args listC
 			Column: colID, Tags: c.Tags, Archived: c.Archived,
 		})
 	}
-	front := map[string]any{
-		"board": boardID.Name,
-		"page":  args.Page,
-		"pages": totalPages,
-		"cards": rows,
+	front := listCardsFront{
+		Board: boardID.Name,
+		Page:  args.Page,
+		Pages: totalPages,
+		Cards: rows,
 	}
 	if query != "" {
-		front["query"] = *args.Query
+		front.Query = *args.Query
 	}
 	body := fmt.Sprintf("%d card(s) (page %d/%d).", len(rows), args.Page, totalPages)
 	if totalPages > 1 {
@@ -104,14 +104,23 @@ func (s *Server) listCards(_ context.Context, _ *mcp.CallToolRequest, args listC
 	return textResult(rendered{front: front, body: body}.String())
 }
 
+// listCardsFront is the ordered frontmatter for list_cards.
+type listCardsFront struct {
+	Board string    `yaml:"board"`
+	Page  int       `yaml:"page"`
+	Pages int       `yaml:"pages"`
+	Query string    `yaml:"query,omitempty"`
+	Cards []cardRow `yaml:"cards"`
+}
+
 // cardRow is one row of list_cards output.
 type cardRow struct {
-	Seq     int      `yaml:"seq"`
-	Name    string   `yaml:"name"`
-	ID      string   `yaml:"id"`
-	Column  string   `yaml:"column,omitempty"`
-	Tags    []string `yaml:"tags,omitempty"`
-	Archived bool    `yaml:"archived,omitempty"`
+	Seq      int      `yaml:"seq"`
+	Name     string   `yaml:"name"`
+	ID       string   `yaml:"id"`
+	Column   string   `yaml:"column,omitempty"`
+	Tags     []string `yaml:"tags,omitempty"`
+	Archived bool     `yaml:"archived,omitempty"`
 }
 
 // --- list_custom_fields ----------------------------------------------------

@@ -70,10 +70,10 @@ func (s *Server) listBoards(_ context.Context, _ *mcp.CallToolRequest, args list
 	for _, b := range boards {
 		rows = append(rows, boardRow{Name: b.Name, ID: b.WidgetCommonID, Type: b.Type, Archived: b.Archived})
 	}
-	front := map[string]any{"boards": rows}
+	front := listBoardsFront{Boards: rows}
 	where := ""
 	if args.Collection != nil && *args.Collection != "" {
-		front["collection"] = *args.Collection
+		front.Collection = *args.Collection
 		where = " in " + *args.Collection
 	}
 	body := fmt.Sprintf("%d board(s)%s.", len(rows), where)
@@ -81,6 +81,12 @@ func (s *Server) listBoards(_ context.Context, _ *mcp.CallToolRequest, args list
 		body += " Pass collection=<name> to list boards inside a folder."
 	}
 	return textResult(rendered{front: front, body: body}.String())
+}
+
+// listBoardsFront is the ordered frontmatter for list_boards.
+type listBoardsFront struct {
+	Collection string     `yaml:"collection,omitempty"`
+	Boards     []boardRow `yaml:"boards"`
 }
 
 // boardRow is one row of list_boards output (name-first, stable id reference).

@@ -9,9 +9,9 @@ import (
 func TestSampleFormats(t *testing.T) {
 	// list_boards
 	lb := rendered{
-		front: map[string]any{
-			"collection": "Internal Tasks (AiApp)",
-			"boards": []boardRow{
+		front: listBoardsFront{
+			Collection: "Internal Tasks (AiApp)",
+			Boards: []boardRow{
 				{Name: "Tasks", ID: "255a5d9c834f8dcf14b732e1", Type: "board"},
 				{Name: "Archive", ID: "2b66d04e2b1f52442db579f8", Type: "board"},
 			},
@@ -22,12 +22,9 @@ func TestSampleFormats(t *testing.T) {
 
 	// list_cards (with query)
 	lc := rendered{
-		front: map[string]any{
-			"board": "Tasks",
-			"page":  1,
-			"pages": 3,
-			"query": "login",
-			"cards": []cardRow{
+		front: listCardsFront{
+			Board: "Tasks", Page: 1, Pages: 3, Query: "login",
+			Cards: []cardRow{
 				{Seq: 3709, Name: "Fix login redirect", ID: "c7e476131c11a9c14fc28d15", Column: "f2df3d3aaa19b133e2469e6f", Tags: []string{"bug"}},
 				{Seq: 3700, Name: "Login rate limit", ID: "062abbc3884d5818023c6cae", Column: "a1bc0000000000000000aaaa"},
 			},
