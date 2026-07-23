@@ -1,0 +1,13 @@
+{
+  "request": {
+    "body": null,
+    "method": "DELETE",
+    "url": "https://favro.com/api/v1/cards/2404e9b3190fdc6c17cc1b72?everywhere=true"
+  },
+  "response": {
+    "body": [
+      "2404e9b3190fdc6c17cc1b72"
+    ],
+    "status": 200
+  }
+}

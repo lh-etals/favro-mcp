@@ -1,0 +1,15 @@
+{
+  "request": {
+    "body": {
+      "columnId": "ec48ca036b700e6117cc1b72"
+    },
+    "method": "PUT",
+    "url": "https://favro.com/api/v1/cards/2404e9b3190fdc6c17cc1b72"
+  },
+  "response": {
+    "body": {
+      "message": "Access denied"
+    },
+    "status": 202
+  }
+}

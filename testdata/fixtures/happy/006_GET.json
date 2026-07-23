@@ -1,0 +1,479 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/widgets?archived=false\u0026page=2\u0026requestId=3fcd1e15e67972f417cc1b72"
+  },
+  "response": {
+    "body": {
+      "entities": [
+        {
+          "archived": false,
+          "collectionIds": [
+            "de0497cf65c3ef0917cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "color": "gray",
+              "columnId": "7c3c1188e50e6b1e17cc1b72",
+              "name": "Name 9"
+            },
+            {
+              "color": "orange",
+              "columnId": "1a738b426458e73317cc1b72",
+              "name": "Name 10"
+            },
+            {
+              "color": "green",
+              "columnId": "b8ab04fbe3a3634817cc1b72",
+              "name": "Name 11"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 12",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "backlog",
+          "widgetCommonId": "56e27eb562eddf5d17cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "de0497cf65c3ef0917cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "color": "gray",
+              "columnId": "f519f86ee2385b7217cc1b72",
+              "name": "Name 9"
+            },
+            {
+              "color": "orange",
+              "columnId": "935172286182d78717cc1b72",
+              "name": "Name 10"
+            },
+            {
+              "color": "green",
+              "columnId": "3188ebe1e0cd539c17cc1b72",
+              "name": "Name 11"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 13",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "backlog",
+          "widgetCommonId": "cfc0659b6017cfb117cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "6df7df54df624bc617cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "columnId": "c2f590e5eacc7dbc64f59bb4",
+              "name": "Name 15"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 14",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "board",
+          "widgetCommonId": "aa66d2c7ddf743f017cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "489e4c815d41c00517cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "columnId": "e6d5c63adc8c3c1a17cc1b72",
+              "name": "Name 15"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 14",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "board",
+          "widgetCommonId": "850d3ff45bd6b82f17cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "c17c33675a6bb05917cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "columnId": "2344b9addb21344417cc1b72",
+              "name": "Name 15"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 16",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "board",
+          "widgetCommonId": "5fb3ad20d9b62c6e17cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "9c22a093d84b249817cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "color": "blue",
+              "columnId": "3a5a1a4d5795a0ad17cc1b72",
+              "name": "Name 18"
+            },
+            {
+              "color": "orange",
+              "columnId": "d8919406d6e01cc217cc1b72",
+              "name": "Name 19"
+            },
+            {
+              "color": "red",
+              "columnId": "76c90dc0562a98d717cc1b72",
+              "name": "Name 20"
+            },
+            {
+              "color": "lime",
+              "columnId": "15008779d57514ec17cc1b72",
+              "name": "Name 21"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 17",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "board",
+          "widgetCommonId": "fdeb26da5900a88317cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "9c22a093d84b249817cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "color": "blue",
+              "columnId": "516f7aecd40a0d1617cc1b72",
+              "name": "Name 22"
+            },
+            {
+              "color": "orange",
+              "columnId": "efa6f4a65354892b17cc1b72",
+              "name": "Name 23"
+            },
+            {
+              "color": "red",
+              "columnId": "8dde6e5fd29f054017cc1b72",
+              "name": "Name 24"
+            },
+            {
+              "color": "lime",
+              "columnId": "2c15e81951e9815517cc1b72",
+              "name": "Name 25"
+            },
+            {
+              "color": "green",
+              "columnId": "ca4d61d2d133fd6a17cc1b72",
+              "name": "Name 26"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 27",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "board",
+          "widgetCommonId": "b338013354bf910117cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "6df7df54df624bc617cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "color": "gray",
+              "columnId": "6884db8c507e797f17cc1b72",
+              "name": "Name 2"
+            },
+            {
+              "color": "orange",
+              "columnId": "6bc5545cfc8f594c64f59bb4",
+              "name": "Name 5"
+            },
+            {
+              "color": "green",
+              "columnId": "a4f3ceff4f1371a917cc1b72",
+              "name": "Name 3"
+            },
+            {
+              "color": "green",
+              "columnId": "432b48b8ce5dedbe17cc1b72",
+              "name": "Name 24"
+            },
+            {
+              "color": "lime",
+              "columnId": "e162c2724da869d317cc1b72",
+              "name": "Name 7"
+            },
+            {
+              "color": "yellow",
+              "columnId": "7f9a3c2bccf2e5e817cc1b72",
+              "name": "Name 11"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 8",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "board",
+          "widgetCommonId": "1dd1b5e54c3d61fd17cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "9c22a093d84b249817cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "columnId": "5a40a9584ad25a2717cc1b72",
+              "name": "Name 28"
+            },
+            {
+              "columnId": "f8782311ca1cd63c17cc1b72",
+              "name": "Name 29"
+            },
+            {
+              "columnId": "96af9ccb4967525117cc1b72",
+              "name": "Name 30"
+            },
+            {
+              "columnId": "34e71684c8b1ce6617cc1b72",
+              "name": "Name 31"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 2",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "backlog",
+          "widgetCommonId": "bc092f9ecb87de1217cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "d31e903e47fc4a7b17cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "columnId": "715609f7c746c69017cc1b72",
+              "name": "Name 15"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 14",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "board",
+          "widgetCommonId": "f8d83b1469142a5c64f59bb4"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "adc4fd6ac5dbbeba17cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "columnId": "4bfc772445263acf17cc1b72",
+              "name": "Name 15"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 32",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "board",
+          "widgetCommonId": "ea33f0ddc470b6e417cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "de0497cf65c3ef0917cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "color": "gray",
+              "columnId": "26a2e450c305af0e17cc1b72",
+              "name": "Name 9"
+            },
+            {
+              "color": "orange",
+              "columnId": "c4da5e0a42502b2317cc1b72",
+              "name": "Name 10"
+            },
+            {
+              "color": "green",
+              "columnId": "6311d7c3c19aa73817cc1b72",
+              "name": "Name 11"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 33",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "backlog",
+          "widgetCommonId": "886b6a9743bb32f917cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "de0497cf65c3ef0917cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "color": "gray",
+              "columnId": "149517d40e5234dc64f59bb4",
+              "name": "Name 9"
+            },
+            {
+              "color": "orange",
+              "columnId": "9f80cb36c02f9f6217cc1b72",
+              "name": "Name 10"
+            },
+            {
+              "color": "green",
+              "columnId": "3db844f03f7a1b7717cc1b72",
+              "name": "Name 11"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 34",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "backlog",
+          "widgetCommonId": "dbefbea9bec4978c17cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "de0497cf65c3ef0917cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "color": "orange",
+              "columnId": "185eb21cbd598fb617cc1b72",
+              "name": "Name 36"
+            },
+            {
+              "color": "purple",
+              "columnId": "b6962bd63ca40bcb17cc1b72",
+              "name": "Name 37"
+            },
+            {
+              "color": "blue",
+              "columnId": "54cda58fbbee87e017cc1b72",
+              "name": "Name 3"
+            },
+            {
+              "color": "lime",
+              "columnId": "f3051f493b3903f517cc1b72",
+              "name": "Name 24"
+            },
+            {
+              "color": "cyan",
+              "columnId": "913c9902ba83800a17cc1b72",
+              "name": "Name 7"
+            },
+            {
+              "color": "yellow",
+              "columnId": "2f7412bc39cdfc1f17cc1b72",
+              "name": "Name 26"
+            },
+            {
+              "color": "orange",
+              "columnId": "cdab8c75b918783417cc1b72",
+              "name": "Name 11"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 35",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "board",
+          "widgetCommonId": "7a2738633e0f13a117cc1b72"
+        },
+        {
+          "archived": false,
+          "collectionIds": [
+            "d31e903e47fc4a7b17cc1b72"
+          ],
+          "color": "blue",
+          "columns": [
+            {
+              "color": "gray",
+              "columnId": "6be3062f3862f44917cc1b72",
+              "name": "Name 2"
+            },
+            {
+              "color": "orange",
+              "columnId": "a1a7fe8b7ad705ec64f59bb4",
+              "name": "Name 5"
+            },
+            {
+              "color": "green",
+              "columnId": "a851f9a236f7ec7317cc1b72",
+              "name": "Name 3"
+            },
+            {
+              "color": "green",
+              "columnId": "4689735bb642688817cc1b72",
+              "name": "Name 24"
+            },
+            {
+              "color": "lime",
+              "columnId": "e4c0ed15358ce49d17cc1b72",
+              "name": "Name 7"
+            },
+            {
+              "color": "yellow",
+              "columnId": "82f866ceb4d760b217cc1b72",
+              "name": "Name 11"
+            }
+          ],
+          "editRole": "guests",
+          "name": "Name 8",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "ownerRole": "fullMembers",
+          "type": "board",
+          "widgetCommonId": "212fe0883421dcc717cc1b72"
+        }
+      ],
+      "limit": 100,
+      "page": 2,
+      "pages": 3,
+      "requestId": "3fcd1e15e67972f417cc1b72"
+    },
+    "status": 200
+  }
+}

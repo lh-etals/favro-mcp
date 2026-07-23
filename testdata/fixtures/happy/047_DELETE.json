@@ -1,0 +1,11 @@
+{
+  "request": {
+    "body": null,
+    "method": "DELETE",
+    "url": "https://favro.com/api/v1/tasklists/d951c40c14cec4ea17cc1b72"
+  },
+  "response": {
+    "body": null,
+    "status": 204
+  }
+}

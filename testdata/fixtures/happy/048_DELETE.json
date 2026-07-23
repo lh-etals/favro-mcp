@@ -1,0 +1,11 @@
+{
+  "request": {
+    "body": null,
+    "method": "DELETE",
+    "url": "https://favro.com/api/v1/columns/522faaf211f8b53e17cc1b72"
+  },
+  "response": {
+    "body": null,
+    "status": 204
+  }
+}

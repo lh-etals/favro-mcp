@@ -1,0 +1,21 @@
+{
+  "request": {
+    "body": {
+      "cardCommonId": "6073dd2617a4d49617cc1b72",
+      "comment": "[redacted text]"
+    },
+    "method": "POST",
+    "url": "https://favro.com/api/v1/comments"
+  },
+  "response": {
+    "body": {
+      "cardCommonId": "6073dd2617a4d49617cc1b72",
+      "comment": "[redacted text]",
+      "commentId": "AAAAAAAAAAAAAAAEk",
+      "created": "2026-07-23T22:57:07.238Z",
+      "organizationId": "3c6ef372fe94f82a17cc1b72",
+      "userId": "AAAAAAAAAAAAAAAA9"
+    },
+    "status": 201
+  }
+}

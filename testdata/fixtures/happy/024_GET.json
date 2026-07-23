@@ -1,0 +1,49 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/cards/2404e9b3190fdc6c17cc1b72?AAAAAAAAAAAAAAAEf=markdown"
+  },
+  "response": {
+    "body": {
+      "archived": false,
+      "assignments": [],
+      "attachments": [],
+      "cardCommonId": "6073dd2617a4d49617cc1b72",
+      "cardId": "2404e9b3190fdc6c17cc1b72",
+      "columnId": "4e115049ec25924c17cc1b72",
+      "createdAt": "2026-07-23T22:57:04.664Z",
+      "createdByUserId": "AAAAAAAAAAAAAAAA9",
+      "customFields": [
+        {
+          "customFieldId": "AAAAAAAAAAAAAAAEd",
+          "value": [
+            "rkMrTPnwDHHkvshWj"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "favroAttachments": [],
+      "isLane": false,
+      "listPosition": 18,
+      "name": "Name 423",
+      "organizationId": "3c6ef372fe94f82a17cc1b72",
+      "parentCardId": null,
+      "position": 18,
+      "sequentialId": 3709,
+      "sheetPosition": 34,
+      "tags": [],
+      "tasksDone": 0,
+      "tasksTotal": 0,
+      "timeOnBoard": {
+        "isStopped": false,
+        "time": 366
+      },
+      "timeOnColumns": {
+        "161349992a6115793f359890": 367
+      },
+      "widgetCommonId": "afd9d6906cdb163717cc1b72"
+    },
+    "status": 200
+  }
+}

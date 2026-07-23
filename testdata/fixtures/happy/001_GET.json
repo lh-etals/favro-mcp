@@ -1,0 +1,150 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/organizations"
+  },
+  "response": {
+    "body": {
+      "entities": [
+        {
+          "name": "Name 1",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "sharedToUsers": [
+            {
+              "joinDate": "2026-05-18T13:32:14.344Z",
+              "role": "administrator",
+              "userId": "AAAAAAAAAAAAAAAA3"
+            },
+            {
+              "joinDate": "2024-10-30T15:07:10.397Z",
+              "role": "administrator",
+              "userId": "AAAAAAAAAAAAAAAA4"
+            },
+            {
+              "joinDate": "2024-11-03T09:30:20.742Z",
+              "role": "administrator",
+              "userId": "AAAAAAAAAAAAAAAA5"
+            },
+            {
+              "joinDate": "2024-10-30T15:29:10.118Z",
+              "role": "administrator",
+              "userId": "AAAAAAAAAAAAAAAA6"
+            },
+            {
+              "joinDate": "2025-10-20T08:40:09.222Z",
+              "role": "administrator",
+              "userId": "AAAAAAAAAAAAAAAA7"
+            },
+            {
+              "joinDate": "2025-07-28T07:53:10.110Z",
+              "role": "administrator",
+              "userId": "AAAAAAAAAAAAAAAA8"
+            },
+            {
+              "joinDate": "2025-09-13T18:17:50.987Z",
+              "role": "administrator",
+              "userId": "AAAAAAAAAAAAAAAA9"
+            },
+            {
+              "joinDate": "2026-04-07T08:59:25.989Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAa"
+            },
+            {
+              "joinDate": "2025-11-03T10:26:20.915Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAb"
+            },
+            {
+              "joinDate": "2026-07-06T11:17:53.476Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAc"
+            },
+            {
+              "joinDate": "2025-05-15T15:30:14.642Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAd"
+            },
+            {
+              "joinDate": "2025-12-01T06:57:04.744Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAe"
+            },
+            {
+              "joinDate": "2025-07-29T16:29:56.951Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAf"
+            },
+            {
+              "joinDate": "2025-10-06T11:03:52.361Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAg"
+            },
+            {
+              "joinDate": "2025-01-06T18:00:06.596Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAh"
+            },
+            {
+              "joinDate": "2026-01-12T12:32:49.848Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAi"
+            },
+            {
+              "joinDate": "2025-08-11T09:33:34.233Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAj"
+            },
+            {
+              "joinDate": "2024-11-07T09:48:04.431Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAk"
+            },
+            {
+              "joinDate": "2025-08-20T06:08:19.689Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAl"
+            },
+            {
+              "joinDate": "2025-04-10T09:50:26.943Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAm"
+            },
+            {
+              "joinDate": "2024-11-11T09:01:03.477Z",
+              "role": "fullMember",
+              "userId": "AAAAAAAAAAAAAAAAn"
+            },
+            {
+              "joinDate": "2024-11-04T14:19:07.730Z",
+              "role": "fullMember",
+              "userId": "RNBPHAbRkugAvmepj"
+            },
+            {
+              "joinDate": "2025-04-14T14:26:36.205Z",
+              "role": "externalMember",
+              "userId": "AAAAAAAAAAAAAAAAo"
+            },
+            {
+              "joinDate": "2026-07-03T07:36:35.464Z",
+              "role": "externalMember",
+              "userId": "AAAAAAAAAAAAAAAAp"
+            },
+            {
+              "joinDate": "2025-04-16T11:16:00.265Z",
+              "role": "externalMember",
+              "userId": "AAAAAAAAAAAAAAAAq"
+            }
+          ],
+          "thumbnail": ""
+        }
+      ],
+      "limit": 100,
+      "page": 0,
+      "pages": 1,
+      "requestId": "9e3779b97f4a7c1517cc1b72"
+    },
+    "status": 200
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "request": {
+    "body": "favro-mcp capture test attachment\n",
+    "method": "POST",
+    "url": "https://favro.com/api/v1/cards/2404e9b3190fdc6c17cc1b72/attachment?filename=favro-mcp-test-attachment.txt"
+  },
+  "response": {
+    "body": {
+      "fileURL": "https://example.com/attachment",
+      "name": "Name 428",
+      "thumbnailURL": "https://favro.s3.eu-central-1.amazonaws.com/a8100d3a-e152-4f61-a8b4-c046416ba9e7.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256\u0026X-Amz-Content-Sha256=UNSIGNED-PAYLOAD\u0026X-Amz-Credential=AKIAJ23AK7LCTC6R6CCA%2F20260723%2Feu-central-1%2Fs3%2Faws4_request\u0026X-Amz-Date=20260723T225708Z\u0026X-Amz-Expires=86400\u0026X-Amz-Signature=dc19c28110967a750743512c2f73c9c68fcaae37474658eea9f966dcbded3f30\u0026X-Amz-SignedHeaders=host\u0026x-amz-checksum-mode=ENABLED\u0026x-id=GetObject"
+    },
+    "status": 201
+  }
+}

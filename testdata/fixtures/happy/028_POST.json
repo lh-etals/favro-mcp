@@ -1,0 +1,20 @@
+{
+  "request": {
+    "body": {
+      "cardCommonId": "6073dd2617a4d49617cc1b72",
+      "name": "Name 425"
+    },
+    "method": "POST",
+    "url": "https://favro.com/api/v1/tasklists"
+  },
+  "response": {
+    "body": {
+      "cardCommonId": "6073dd2617a4d49617cc1b72",
+      "name": "Name 425",
+      "organizationId": "3c6ef372fe94f82a17cc1b72",
+      "position": 0,
+      "taskListId": "d951c40c14cec4ea17cc1b72"
+    },
+    "status": 201
+  }
+}

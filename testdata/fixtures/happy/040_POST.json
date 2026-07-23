@@ -1,0 +1,23 @@
+{
+  "request": {
+    "body": {
+      "name": "Name 429",
+      "widgetCommonId": "afd9d6906cdb163717cc1b72"
+    },
+    "method": "POST",
+    "url": "https://favro.com/api/v1/columns"
+  },
+  "response": {
+    "body": {
+      "cardCount": 0,
+      "columnId": "522faaf211f8b53e17cc1b72",
+      "estimationSum": 0,
+      "name": "Name 429",
+      "organizationId": "3c6ef372fe94f82a17cc1b72",
+      "position": 6,
+      "timeSum": 0,
+      "widgetCommonId": "afd9d6906cdb163717cc1b72"
+    },
+    "status": 201
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/organizations"
+  },
+  "response": {
+    "body": {
+      "message": "Something went wrong. Please check your credentials."
+    },
+    "status": 401
+  }
+}

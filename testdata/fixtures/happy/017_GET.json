@@ -1,0 +1,11 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/customfields?page=10\u0026requestId=38c30afc8b61384d17cc1b72"
+  },
+  "response": {
+    "body": "\u003cbinary 66053 bytes\u003e",
+    "status": 200
+  }
+}

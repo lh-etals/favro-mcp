@@ -1,0 +1,22 @@
+{
+  "request": {
+    "body": {
+      "name": "Name 426",
+      "taskListId": "d951c40c14cec4ea17cc1b72"
+    },
+    "method": "POST",
+    "url": "https://favro.com/api/v1/tasks"
+  },
+  "response": {
+    "body": {
+      "cardCommonId": "6073dd2617a4d49617cc1b72",
+      "completed": false,
+      "name": "Name 426",
+      "organizationId": "3c6ef372fe94f82a17cc1b72",
+      "position": 0,
+      "taskId": "77893dc5941940ff17cc1b72",
+      "taskListId": "d951c40c14cec4ea17cc1b72"
+    },
+    "status": 201
+  }
+}

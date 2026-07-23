@@ -1,0 +1,22 @@
+{
+  "request": {
+    "body": {
+      "completed": true,
+      "name": "Name 427"
+    },
+    "method": "PUT",
+    "url": "https://favro.com/api/v1/tasks/77893dc5941940ff17cc1b72"
+  },
+  "response": {
+    "body": {
+      "cardCommonId": "6073dd2617a4d49617cc1b72",
+      "completed": true,
+      "name": "Name 427",
+      "organizationId": "3c6ef372fe94f82a17cc1b72",
+      "position": 0,
+      "taskId": "77893dc5941940ff17cc1b72",
+      "taskListId": "d951c40c14cec4ea17cc1b72"
+    },
+    "status": 200
+  }
+}

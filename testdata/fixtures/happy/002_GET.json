@@ -1,0 +1,78 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/columns?widgetCommonId=afd9d6906cdb163717cc1b72"
+  },
+  "response": {
+    "body": {
+      "entities": [
+        {
+          "cardCount": 10,
+          "columnId": "4e115049ec25924c17cc1b72",
+          "estimationSum": 0,
+          "name": "Name 2",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "position": 0,
+          "timeSum": 0,
+          "widgetCommonId": "afd9d6906cdb163717cc1b72"
+        },
+        {
+          "cardCount": 1,
+          "columnId": "ec48ca036b700e6117cc1b72",
+          "estimationSum": 0,
+          "name": "Name 3",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "position": 2,
+          "timeSum": 0,
+          "widgetCommonId": "afd9d6906cdb163717cc1b72"
+        },
+        {
+          "cardCount": 3,
+          "columnId": "8a8043bceaba8a7617cc1b72",
+          "estimationSum": 0,
+          "name": "Name 4",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "position": 3,
+          "timeSum": 0,
+          "widgetCommonId": "afd9d6906cdb163717cc1b72"
+        },
+        {
+          "cardCount": 3,
+          "columnId": "28b7bd766a05068b17cc1b72",
+          "estimationSum": 0,
+          "name": "Name 5",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "position": 1,
+          "timeSum": 0,
+          "widgetCommonId": "afd9d6906cdb163717cc1b72"
+        },
+        {
+          "cardCount": 10,
+          "columnId": "c6ef372fe94f82a017cc1b72",
+          "estimationSum": 0,
+          "name": "Name 6",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "position": 5,
+          "timeSum": 0,
+          "widgetCommonId": "afd9d6906cdb163717cc1b72"
+        },
+        {
+          "cardCount": 3,
+          "columnId": "6526b0e96899feb517cc1b72",
+          "estimationSum": 0,
+          "name": "Name 7",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "position": 4,
+          "timeSum": 0,
+          "widgetCommonId": "afd9d6906cdb163717cc1b72"
+        }
+      ],
+      "limit": 100,
+      "page": 0,
+      "pages": 1,
+      "requestId": "35e2aa2e7e47acac64f59bb4"
+    },
+    "status": 200
+  }
+}

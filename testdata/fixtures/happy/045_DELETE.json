@@ -1,0 +1,11 @@
+{
+  "request": {
+    "body": null,
+    "method": "DELETE",
+    "url": "https://favro.com/api/v1/comments/AAAAAAAAAAAAAAAEk"
+  },
+  "response": {
+    "body": null,
+    "status": 204
+  }
+}

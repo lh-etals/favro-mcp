@@ -1,0 +1,11 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/cards?AAAAAAAAAAAAAAAEf=markdown\u0026unique=true\u0026widgetCommonId=afd9d6906cdb163717cc1b72"
+  },
+  "response": {
+    "body": "\u003cbinary 66155 bytes\u003e",
+    "status": 200
+  }
+}

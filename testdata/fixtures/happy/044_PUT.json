@@ -1,0 +1,56 @@
+{
+  "request": {
+    "body": {
+      "removeAttachments": [
+        "https://favro.s3.eu-central-1.amazonaws.com/a8100d3a-e152-4f61-a8b4-c046416ba9e7.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256\u0026X-Amz-Content-Sha256=UNSIGNED-PAYLOAD\u0026X-Amz-Credential=AKIAJ23AK7LCTC6R6CCA%2F20260723%2Feu-central-1%2Fs3%2Faws4_request\u0026X-Amz-Date=20260723T225708Z\u0026X-Amz-Expires=86400\u0026X-Amz-Signature=dc19c28110967a750743512c2f73c9c68fcaae37474658eea9f966dcbded3f30\u0026X-Amz-SignedHeaders=host\u0026x-amz-checksum-mode=ENABLED\u0026x-id=GetObject"
+      ]
+    },
+    "method": "PUT",
+    "url": "https://favro.com/api/v1/cards/2404e9b3190fdc6c17cc1b72"
+  },
+  "response": {
+    "body": {
+      "archived": false,
+      "assignments": [],
+      "attachments": [],
+      "cardCommonId": "6073dd2617a4d49617cc1b72",
+      "cardId": "2404e9b3190fdc6c17cc1b72",
+      "columnId": "4e115049ec25924c17cc1b72",
+      "createdAt": "2026-07-23T22:57:04.664Z",
+      "createdByUserId": "AAAAAAAAAAAAAAAA9",
+      "customFields": [
+        {
+          "customFieldId": "AAAAAAAAAAAAAAAEd",
+          "value": [
+            "rkMrTPnwDHHkvshWj"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "detailedDescription": "[redacted text]",
+      "favroAttachments": [],
+      "isLane": false,
+      "laneId": null,
+      "listPosition": 18,
+      "name": "Name 424",
+      "numComments": 1,
+      "organizationId": "3c6ef372fe94f82a17cc1b72",
+      "parentCardId": null,
+      "position": 18,
+      "sequentialId": 3709,
+      "sheetPosition": 34,
+      "tags": [],
+      "tasksDone": 1,
+      "tasksTotal": 1,
+      "timeOnBoard": {
+        "isStopped": true,
+        "time": -420
+      },
+      "timeOnColumns": {
+        "161349992a6115793f359890": 1999
+      },
+      "widgetCommonId": "afd9d6906cdb163717cc1b72"
+    },
+    "status": 200
+  }
+}

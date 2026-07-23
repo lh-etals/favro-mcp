@@ -1,0 +1,13 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/widgets/zzz-nonexistent-id-capture"
+  },
+  "response": {
+    "body": {
+      "message": "Access denied"
+    },
+    "status": 403
+  }
+}

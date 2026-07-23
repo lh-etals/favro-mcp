@@ -1,0 +1,11 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/widgets?archived=false\u0026page=1\u0026requestId=3fcd1e15e67972f417cc1b72"
+  },
+  "response": {
+    "body": "\u003cbinary 84742 bytes\u003e",
+    "status": 200
+  }
+}

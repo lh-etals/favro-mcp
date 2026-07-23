@@ -1,0 +1,17 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/comments?cardCommonId=6073dd2617a4d49617cc1b72"
+  },
+  "response": {
+    "body": {
+      "entities": [],
+      "limit": 100,
+      "page": 0,
+      "pages": 0,
+      "requestId": "3b1a4a52958448d517cc1b72"
+    },
+    "status": 200
+  }
+}

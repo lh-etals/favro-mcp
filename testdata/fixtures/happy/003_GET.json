@@ -1,0 +1,55 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/widgets/afd9d6906cdb163717cc1b72"
+  },
+  "response": {
+    "body": {
+      "archived": false,
+      "collectionIds": [
+        "a195a45c672ef6df17cc1b72"
+      ],
+      "color": "blue",
+      "columns": [
+        {
+          "color": "gray",
+          "columnId": "4e115049ec25924c17cc1b72",
+          "name": "Name 2"
+        },
+        {
+          "color": "orange",
+          "columnId": "28b7bd766a05068b17cc1b72",
+          "name": "Name 5"
+        },
+        {
+          "color": "green",
+          "columnId": "ec48ca036b700e6117cc1b72",
+          "name": "Name 3"
+        },
+        {
+          "color": "green",
+          "columnId": "8a8043bceaba8a7617cc1b72",
+          "name": "Name 4"
+        },
+        {
+          "color": "lime",
+          "columnId": "6526b0e96899feb517cc1b72",
+          "name": "Name 7"
+        },
+        {
+          "color": "yellow",
+          "columnId": "c6ef372fe94f82a017cc1b72",
+          "name": "Name 6"
+        }
+      ],
+      "editRole": "guests",
+      "name": "Name 8",
+      "organizationId": "3c6ef372fe94f82a17cc1b72",
+      "ownerRole": "fullMembers",
+      "type": "board",
+      "widgetCommonId": "afd9d6906cdb163717cc1b72"
+    },
+    "status": 200
+  }
+}

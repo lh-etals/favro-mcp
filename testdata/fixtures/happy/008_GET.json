@@ -1,0 +1,817 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/customfields?page=1\u0026requestId=38c30afc8b61384d17cc1b72"
+  },
+  "response": {
+    "body": {
+      "entities": [
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5A",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "7531fe6f89f6307717cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5C",
+          "enabled": true,
+          "name": "Name 77",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Text",
+          "widgetCommonId": "b1a0f1e2888b28a117cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5E",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "47d2c4d8f7278bd517cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5G",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "ee0fe555872020cb17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5H",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "db24370158aa635c17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5I",
+          "enabled": true,
+          "name": "Name 77",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Text",
+          "widgetCommonId": "d9dae58417c5400f17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5K",
+          "enabled": true,
+          "name": "Name 46",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Number",
+          "widgetCommonId": "66edcc3b844a111f17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5L",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "2ff1dc911498eb3c17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5N",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "419439680229855e17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5P",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "7e032cdb00be7d8817cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5R",
+          "enabled": true,
+          "name": "Name 46",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Number",
+          "widgetCommonId": "ba72204dff5375b217cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5S",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "95188d7a7d32e9f117cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5V",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "33500733fc7d660617cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5W",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "7d85630625f38e6b17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5X",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "1d062e3ce6232dcd17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA5Y",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "73a1f1aaa93e4b1c64f59bb4"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA60",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "4a6567d378f1d26f17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA62",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "86d45b467786ca9917cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA63",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "617ac872f5663ed817cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA65",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "9de9bbe5f3fb370217cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA67",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "157e514eb040040917cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA68",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "66edcc3b844a111f17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA69",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "d90f5ddbb1ab0bdf17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6b",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "16c7a2cbf125275617cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6c",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "363068020996f1b317cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6d",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "e0973ac9e78e35a317cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6e",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "1649d8f7165a383917cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6g",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "2ddd036b6d9993bf17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6i",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "6a4bf6de6c2e8be917cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6k",
+          "enabled": true,
+          "name": "Name 77",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Text",
+          "widgetCommonId": "a6baea516ac3841317cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6l",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "bf675a41b36c58dc17cc1b72"
+        },
+        {
+          "customFieldId": "FwkJFFMzFoSRKaxzq",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "8161577de8a2f85217cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6n",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "bdd04af0e737f07c17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6p",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "60fcfe9e1a9b4fbb17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6q",
+          "enabled": true,
+          "name": "Name 46",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Number",
+          "widgetCommonId": "9876b81d651764bb17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6s",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "7aa5023818da02be17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6u",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "d4e5ab9063ac5ce517cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6w",
+          "enabled": true,
+          "name": "Name 46",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Number",
+          "widgetCommonId": "11549f036241550f17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6x",
+          "enabled": true,
+          "name": "Name 79",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Tags"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6z",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "ebfb0c2fe020c94e17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6A",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "c6a1795c5e003d8d17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6C",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "1bbcdcbfa53e0a8017cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6D",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "3cecbd47d95fe74717cc1b72"
+        },
+        {
+          "customFieldId": "NvPWTxBJfddbLcYfH",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "eb7d425b0555da3117cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6E",
+          "enabled": true,
+          "name": "Name 80",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Text",
+          "widgetCommonId": "e96869355e5682b417cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6F",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "11549f036241550f17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6H",
+          "enabled": true,
+          "name": "Name 77",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Text",
+          "widgetCommonId": "ddb6d9fbda74a9f617cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6I",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "30bd64397ab31f6c17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6J",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "b338013354bf910117cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6L",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "5694c0e1d79e9a4a17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6M",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "313b2e0e557e0e8917cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6O",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "6daa2181541306b317cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6R",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "be19b3ad35d82c8c64f59bb4"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6S",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "c623af8783354e7017cc1b72"
+        },
+        {
+          "customFieldId": "YtQWiFovaZGnHQvhn",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "e6880867513cf70717cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6U",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "10d6d52e877665f217cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6V",
+          "enabled": true,
+          "name": "Name 77",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Text",
+          "widgetCommonId": "4f5aa1c72d0ab59917cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6W",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "4c7a40f91ff129ec17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6X",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "fdeb26da5900a88317cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA6Z",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "fd9d6906cdb1637017cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA70",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "27ec35ce03ead25b17cc1b72"
+        },
+        {
+          "customFieldId": "bAkFeimxyqSxyNCvC",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "c76d0104c41a71bd17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA72",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "d843d6334b90d7af17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA73",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "2720ae259dd09e2b17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA74",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "52b8cc6a14ef306317cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA75",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "ef5936d2c805441817cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA78",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "8d90b08c474fc02d17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA79",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "1af155173f23d65017cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7a",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "66e97724479b081c64f59bb4"
+        },
+        {
+          "customFieldId": "fDJqNZtpPeJAqvCun",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "c2c584e49b50d3a617cc1b72"
+        },
+        {
+          "customFieldId": "fYgJMmpSDkmoMevLo",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "a4a6112bc3c42c9617cc1b72"
+        },
+        {
+          "customFieldId": "fqZYPQrerQicuEAuW",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "42dd8ae5430ea8ab17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7e",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "e2ac13ef8e8d8d2017cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7g",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "7f4c7e5841a3a0d517cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7i",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "bbbb71cb403898ff17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7j",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "6f4130d220476f1317cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7k",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "8e5c3834ad69f45d17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7l",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "292a2fa81ca469ac64f59bb4"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7n",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "d2d0d26abcad056817cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7o",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "bc86f973a652cd2f17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7p",
+          "enabled": true,
+          "name": "Name 46",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Number",
+          "widgetCommonId": "fdeb26da5900a88317cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7q",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "341b8edc62979a3617cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7r",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "8bc9953a2b9fadc317cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7t",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "881dacc3b86bede617cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7v",
+          "enabled": true,
+          "name": "Name 81",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Number",
+          "widgetCommonId": "c48ca036b700e61017cc1b72"
+        },
+        {
+          "customFieldId": "rpCMXHSAqoRKNpfmZ",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "fb93a9b595de3a74d2980423"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7x",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "cfc0659b6017cfb117cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7y",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "9876b81d651764bb17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7z",
+          "enabled": true,
+          "name": "Name 46",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Number",
+          "widgetCommonId": "b338013354bf910117cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7A",
+          "enabled": true,
+          "name": "Name 77",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Text",
+          "widgetCommonId": "1810f449320a4aa317cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7C",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "88e9346c1e86221617cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7D",
+          "enabled": true,
+          "name": "Name 46",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Number",
+          "widgetCommonId": "42dd8ae5430ea8ab17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7F",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "f2b76175afe9bee217cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7H",
+          "enabled": true,
+          "name": "Name 77",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Text",
+          "widgetCommonId": "2f2654e8ae7eb70c17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7I",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "69ce2d0991639ccc17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7J",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "5616f70cfcd3ab2d17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7K",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "45bdebb35028345817cc1b72"
+        },
+        {
+          "customFieldId": "yRschtEZWDnCcJZJm",
+          "enabled": true,
+          "name": "Name 82",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Number",
+          "widgetCommonId": "d9dae58417c5400f17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7L",
+          "enabled": true,
+          "name": "Name 76",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Sequential ID",
+          "widgetCommonId": "858b09c936a1a74c17cc1b72"
+        },
+        {
+          "customFieldId": "AAAAAAAAAAAAAAA7M",
+          "enabled": true,
+          "name": "Name 78",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "type": "Rating",
+          "widgetCommonId": "ba72204dff5375b217cc1b72"
+        }
+      ],
+      "limit": 100,
+      "page": 1,
+      "pages": 13,
+      "requestId": "38c30afc8b61384d17cc1b72"
+    },
+    "status": 200
+  }
+}

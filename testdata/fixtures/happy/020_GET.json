@@ -1,0 +1,168 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/users"
+  },
+  "response": {
+    "body": {
+      "entities": [
+        {
+          "email": "user1@example.com",
+          "name": "Name 301",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAd"
+        },
+        {
+          "email": "user2@example.com",
+          "name": "Name 302",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAn"
+        },
+        {
+          "email": "user3@example.com",
+          "name": "Name 303",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAa"
+        },
+        {
+          "email": "user4@example.com",
+          "name": "Name 304",
+          "organizationRole": "administrator",
+          "userId": "AAAAAAAAAAAAAAAA9"
+        },
+        {
+          "email": "user5@example.com",
+          "name": "Name 305",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAe"
+        },
+        {
+          "email": "user6@example.com",
+          "name": "Name 306",
+          "organizationRole": "externalMember",
+          "userId": "AAAAAAAAAAAAAAAAp"
+        },
+        {
+          "email": "user7@example.com",
+          "name": "Name 307",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAm"
+        },
+        {
+          "email": "user8@example.com",
+          "name": "Name 308",
+          "organizationRole": "administrator",
+          "userId": "AAAAAAAAAAAAAAAA3"
+        },
+        {
+          "email": "user9@example.com",
+          "name": "Name 309",
+          "organizationRole": "administrator",
+          "userId": "AAAAAAAAAAAAAAAA8"
+        },
+        {
+          "email": "user10@example.com",
+          "name": "Name 310",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAl"
+        },
+        {
+          "email": "user11@example.com",
+          "name": "Name 311",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAf"
+        },
+        {
+          "email": "user12@example.com",
+          "name": "Name 312",
+          "organizationRole": "fullMember",
+          "userId": "RNBPHAbRkugAvmepj"
+        },
+        {
+          "email": "user13@example.com",
+          "name": "Name 313",
+          "organizationRole": "administrator",
+          "userId": "AAAAAAAAAAAAAAAA4"
+        },
+        {
+          "email": "user14@example.com",
+          "name": "Name 314",
+          "organizationRole": "administrator",
+          "userId": "AAAAAAAAAAAAAAAA5"
+        },
+        {
+          "email": "user15@example.com",
+          "name": "Name 315",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAj"
+        },
+        {
+          "email": "user16@example.com",
+          "name": "Name 316",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAk"
+        },
+        {
+          "email": "user17@example.com",
+          "name": "Name 317",
+          "organizationRole": "administrator",
+          "userId": "AAAAAAAAAAAAAAAA6"
+        },
+        {
+          "email": "user18@example.com",
+          "name": "Name 318",
+          "organizationRole": "externalMember",
+          "userId": "AAAAAAAAAAAAAAAAo"
+        },
+        {
+          "email": "user19@example.com",
+          "name": "Name 319",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAg"
+        },
+        {
+          "email": "user20@example.com",
+          "name": "Name 320",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAb"
+        },
+        {
+          "email": "user21@example.com",
+          "name": "Name 321",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAh"
+        },
+        {
+          "email": "user22@example.com",
+          "name": "Name 322",
+          "organizationRole": "administrator",
+          "userId": "AAAAAAAAAAAAAAAA7"
+        },
+        {
+          "email": "user23@example.com",
+          "name": "Name 323",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAi"
+        },
+        {
+          "email": "user24@example.com",
+          "name": "Name 324",
+          "organizationRole": "fullMember",
+          "userId": "AAAAAAAAAAAAAAAAc"
+        },
+        {
+          "email": "user25@example.com",
+          "name": "Name 325",
+          "organizationRole": "externalMember",
+          "userId": "AAAAAAAAAAAAAAAAq"
+        }
+      ],
+      "limit": 100,
+      "page": 0,
+      "pages": 1,
+      "requestId": "11193b5eea9a1efd17cc1b72"
+    },
+    "status": 200
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "request": {
+    "body": {
+      "removeAssignmentIds": [
+        "AAAAAAAAAAAAAAAAd"
+      ]
+    },
+    "method": "PUT",
+    "url": "https://favro.com/api/v1/cards/2404e9b3190fdc6c17cc1b72"
+  },
+  "response": {
+    "body": {
+      "archived": false,
+      "assignments": [],
+      "attachments": [],
+      "cardCommonId": "6073dd2617a4d49617cc1b72",
+      "cardId": "2404e9b3190fdc6c17cc1b72",
+      "columnId": "4e115049ec25924c17cc1b72",
+      "createdAt": "2026-07-23T22:57:04.664Z",
+      "createdByUserId": "AAAAAAAAAAAAAAAA9",
+      "customFields": [
+        {
+          "customFieldId": "AAAAAAAAAAAAAAAEd",
+          "value": [
+            "rkMrTPnwDHHkvshWj"
+          ]
+        }
+      ],
+      "dependencies": [],
+      "detailedDescription": "[redacted text]",
+      "favroAttachments": [],
+      "isLane": false,
+      "listPosition": 18,
+      "name": "Name 424",
+      "numComments": 1,
+      "organizationId": "3c6ef372fe94f82a17cc1b72",
+      "parentCardId": null,
+      "position": 18,
+      "sequentialId": 3709,
+      "sheetPosition": 34,
+      "tags": [],
+      "tasksDone": 1,
+      "tasksTotal": 1,
+      "timeOnBoard": {
+        "isStopped": false,
+        "time": 3932
+      },
+      "timeOnColumns": {
+        "161349992a6115793f359890": 3933
+      },
+      "widgetCommonId": "afd9d6906cdb163717cc1b72"
+    },
+    "status": 200
+  }
+}

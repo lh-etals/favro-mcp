@@ -1,0 +1,606 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/tags"
+  },
+  "response": {
+    "body": {
+      "entities": [
+        {
+          "color": "purple",
+          "name": "Name 326",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "af50b51869e49b1217cc1b72"
+        },
+        {
+          "color": "blue",
+          "name": "Name 115",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "4d882ed1e92f172717cc1b72"
+        },
+        {
+          "color": "green",
+          "name": "Name 327",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACo"
+        },
+        {
+          "name": "Name 328",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACp"
+        },
+        {
+          "color": "green",
+          "name": "Name 329",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACq"
+        },
+        {
+          "color": "blue",
+          "name": "Name 330",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACr"
+        },
+        {
+          "color": "red",
+          "name": "Name 24",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "649d8f7165a3839017cc1b72"
+        },
+        {
+          "color": "lime",
+          "name": "Name 331",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACt"
+        },
+        {
+          "color": "green",
+          "name": "Name 332",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACu"
+        },
+        {
+          "color": "green",
+          "name": "Name 333",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "3f43fc9de382f7cf17cc1b72"
+        },
+        {
+          "name": "Name 62",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACw"
+        },
+        {
+          "color": "green",
+          "name": "Name 11",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "7bb2f010e217eff917cc1b72"
+        },
+        {
+          "color": "blue",
+          "name": "Name 7",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "19ea69ca61626c0e17cc1b72"
+        },
+        {
+          "color": "purple",
+          "name": "Name 3",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "b821e383e0ace82317cc1b72"
+        },
+        {
+          "color": "blue",
+          "name": "Name 334",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACA"
+        },
+        {
+          "color": "blue",
+          "name": "Name 335",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACB"
+        },
+        {
+          "color": "blue",
+          "name": "Name 336",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACC"
+        },
+        {
+          "color": "cyan",
+          "name": "Name 61",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACD"
+        },
+        {
+          "color": "green",
+          "name": "Name 337",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "cf3744235d21548c17cc1b72"
+        },
+        {
+          "color": "cyan",
+          "name": "Name 338",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACF"
+        },
+        {
+          "color": "blue",
+          "name": "Name 339",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACG"
+        },
+        {
+          "color": "blue",
+          "name": "Name 340",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACH"
+        },
+        {
+          "name": "Name 341",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "48152b095a4b44e017cc1b72"
+        },
+        {
+          "color": "blue",
+          "name": "Name 153",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACJ"
+        },
+        {
+          "color": "blue",
+          "name": "Name 342",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACK"
+        },
+        {
+          "color": "purple",
+          "name": "Name 343",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACL"
+        },
+        {
+          "color": "green",
+          "name": "Name 344",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACM"
+        },
+        {
+          "color": "green",
+          "name": "Name 345",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACN"
+        },
+        {
+          "name": "Name 346",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACO"
+        },
+        {
+          "color": "blue",
+          "name": "Name 347",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACP"
+        },
+        {
+          "name": "Name 348",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACQ"
+        },
+        {
+          "color": "lime",
+          "name": "Name 349",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "EEvxiqHpvfNDSAkGa"
+        },
+        {
+          "name": "Name 116",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACR"
+        },
+        {
+          "color": "orange",
+          "name": "Name 350",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACS"
+        },
+        {
+          "color": "cyan",
+          "name": "Name 351",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACT"
+        },
+        {
+          "color": "purple",
+          "name": "Name 352",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACU"
+        },
+        {
+          "color": "blue",
+          "name": "Name 353",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "HLLQfRQJDiEHeQjov"
+        },
+        {
+          "name": "Name 354",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACV"
+        },
+        {
+          "color": "yellow",
+          "name": "Name 355",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACW"
+        },
+        {
+          "color": "blue",
+          "name": "Name 203",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACX"
+        },
+        {
+          "color": "cyan",
+          "name": "Name 356",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACY"
+        },
+        {
+          "color": "green",
+          "name": "Name 357",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAACZ"
+        },
+        {
+          "color": "purple",
+          "name": "Name 358",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAD0"
+        },
+        {
+          "color": "purple",
+          "name": "Name 359",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAD1"
+        },
+        {
+          "name": "Name 292",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAD2"
+        },
+        {
+          "color": "blue",
+          "name": "Name 360",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAD3"
+        },
+        {
+          "name": "Name 361",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAD4"
+        },
+        {
+          "color": "lime",
+          "name": "Name 362",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAD5"
+        },
+        {
+          "color": "orange",
+          "name": "Name 363",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAD6"
+        },
+        {
+          "name": "Name 364",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "WtajbBnvHsMMAcmmF"
+        },
+        {
+          "color": "purple",
+          "name": "Name 365",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAD7"
+        },
+        {
+          "color": "lime",
+          "name": "Name 366",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAD8"
+        },
+        {
+          "color": "orange",
+          "name": "Name 367",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAD9"
+        },
+        {
+          "color": "green",
+          "name": "Name 368",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "96267b534670d72c17cc1b72"
+        },
+        {
+          "color": "yellow",
+          "name": "Name 147",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADb"
+        },
+        {
+          "color": "red",
+          "name": "Name 369",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADc"
+        },
+        {
+          "color": "blue",
+          "name": "Name 370",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "70cce87fc4504b6b17cc1b72"
+        },
+        {
+          "color": "gray",
+          "name": "Name 197",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "f046239439ac780c64f59bb4"
+        },
+        {
+          "color": "blue",
+          "name": "Name 371",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADf"
+        },
+        {
+          "color": "purple",
+          "name": "Name 372",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "4b7355ac422fbfaa17cc1b72"
+        },
+        {
+          "color": "lime",
+          "name": "Name 373",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "e9aacf65c17a3bbf17cc1b72"
+        },
+        {
+          "color": "blue",
+          "name": "Name 93",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADi"
+        },
+        {
+          "color": "blue",
+          "name": "Name 374",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "2619c2d8c00f33e917cc1b72"
+        },
+        {
+          "color": "blue",
+          "name": "Name 375",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADk"
+        },
+        {
+          "color": "blue",
+          "name": "Name 376",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADl"
+        },
+        {
+          "color": "blue",
+          "name": "Name 377",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADm"
+        },
+        {
+          "color": "cyan",
+          "name": "Name 378",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADn"
+        },
+        {
+          "color": "blue",
+          "name": "Name 100",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADo"
+        },
+        {
+          "color": "blue",
+          "name": "Name 379",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADp"
+        },
+        {
+          "color": "gray",
+          "name": "Name 380",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "799e16eb3b18987c17cc1b72"
+        },
+        {
+          "color": "lime",
+          "name": "Name 381",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "17d590a4ba63149117cc1b72"
+        },
+        {
+          "color": "green",
+          "name": "Name 382",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADs"
+        },
+        {
+          "name": "Name 383",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADt"
+        },
+        {
+          "color": "blue",
+          "name": "Name 384",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADu"
+        },
+        {
+          "color": "green",
+          "name": "Name 385",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADv"
+        },
+        {
+          "color": "yellow",
+          "name": "Name 386",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADw"
+        },
+        {
+          "color": "blue",
+          "name": "Name 387",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADx"
+        },
+        {
+          "color": "purple",
+          "name": "Name 152",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "mEKSJqFQEKNELdgPf"
+        },
+        {
+          "color": "blue",
+          "name": "Name 388",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADy"
+        },
+        {
+          "color": "blue",
+          "name": "Name 389",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADz"
+        },
+        {
+          "color": "purple",
+          "name": "Name 390",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADA"
+        },
+        {
+          "color": "blue",
+          "name": "Name 391",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADB"
+        },
+        {
+          "name": "Name 392",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADC"
+        },
+        {
+          "color": "cyan",
+          "name": "Name 71",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADD"
+        },
+        {
+          "color": "yellow",
+          "name": "Name 393",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADE"
+        },
+        {
+          "color": "purple",
+          "name": "Name 150",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADF"
+        },
+        {
+          "color": "blue",
+          "name": "Name 394",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADG"
+        },
+        {
+          "color": "brown",
+          "name": "Name 395",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADH"
+        },
+        {
+          "color": "purple",
+          "name": "Name 149",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADI"
+        },
+        {
+          "color": "red",
+          "name": "Name 396",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADJ"
+        },
+        {
+          "color": "blue",
+          "name": "Name 397",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADK"
+        },
+        {
+          "color": "cyan",
+          "name": "Name 398",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADL"
+        },
+        {
+          "color": "blue",
+          "name": "Name 399",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "wdAibHXphQSxcjNYy"
+        },
+        {
+          "color": "green",
+          "name": "Name 400",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADM"
+        },
+        {
+          "color": "purple",
+          "name": "Name 401",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADN"
+        },
+        {
+          "color": "blue",
+          "name": "Name 59",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADO"
+        },
+        {
+          "color": "cyan",
+          "name": "Name 402",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADP"
+        },
+        {
+          "color": "blue",
+          "name": "Name 403",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADQ"
+        },
+        {
+          "color": "blue",
+          "name": "Name 404",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "zNwRiEvMcuxDGjjPE"
+        },
+        {
+          "color": "brown",
+          "name": "Name 405",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADR"
+        }
+      ],
+      "limit": 100,
+      "page": 0,
+      "pages": 2,
+      "requestId": "c7af6735273e2ac817cc1b72"
+    },
+    "status": 200
+  }
+}

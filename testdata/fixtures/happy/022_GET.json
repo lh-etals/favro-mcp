@@ -1,0 +1,143 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/tags?page=1\u0026requestId=c7af6735273e2ac817cc1b72"
+  },
+  "response": {
+    "body": {
+      "entities": [
+        {
+          "color": "blue",
+          "name": "Name 406",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADT"
+        },
+        {
+          "color": "cyan",
+          "name": "Name 407",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADU"
+        },
+        {
+          "color": "blue",
+          "name": "Name 408",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADV"
+        },
+        {
+          "color": "red",
+          "name": "Name 409",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "408d4e1b24681b1c17cc1b72"
+        },
+        {
+          "color": "purple",
+          "name": "Name 410",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAADX"
+        },
+        {
+          "color": "blue",
+          "name": "Name 411",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "7cfc418e22fd134617cc1b72"
+        },
+        {
+          "color": "blue",
+          "name": "Name 412",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "1b33bb47a2478f5b17cc1b72"
+        },
+        {
+          "color": "blue",
+          "name": "Name 413",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAE0"
+        },
+        {
+          "color": "blue",
+          "name": "Name 5",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAE1"
+        },
+        {
+          "color": "blue",
+          "name": "Name 414",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAE2"
+        },
+        {
+          "name": "Name 48",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAE3"
+        },
+        {
+          "color": "cyan",
+          "name": "Name 415",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "32491be71ebbfbc417cc1b72"
+        },
+        {
+          "color": "blue",
+          "name": "Name 416",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAE5"
+        },
+        {
+          "color": "purple",
+          "name": "Name 417",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "ggrKMLvuBrcScotmx"
+        },
+        {
+          "color": "purple",
+          "name": "Name 13",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAE6"
+        },
+        {
+          "color": "purple",
+          "name": "Name 418",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAE7"
+        },
+        {
+          "color": "blue",
+          "name": "Name 419",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAE8"
+        },
+        {
+          "color": "blue",
+          "name": "Name 420",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAE9"
+        },
+        {
+          "color": "purple",
+          "name": "Name 421",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "nPrrgeepezJEKEvmj"
+        },
+        {
+          "color": "green",
+          "name": "Name 422",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAEa"
+        },
+        {
+          "color": "blue",
+          "name": "Name 281",
+          "organizationId": "3c6ef372fe94f82a17cc1b72",
+          "tagId": "AAAAAAAAAAAAAAAEb"
+        }
+      ],
+      "limit": 100,
+      "page": 1,
+      "pages": 2,
+      "requestId": "c7af6735273e2ac817cc1b72"
+    },
+    "status": 200
+  }
+}

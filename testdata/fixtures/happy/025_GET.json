@@ -1,0 +1,17 @@
+{
+  "request": {
+    "body": null,
+    "method": "GET",
+    "url": "https://favro.com/api/v1/tasklists?cardCommonId=6073dd2617a4d49617cc1b72"
+  },
+  "response": {
+    "body": {
+      "entities": [],
+      "limit": 100,
+      "page": 0,
+      "pages": 0,
+      "requestId": "9ce2d0991639ccc017cc1b72"
+    },
+    "status": 200
+  }
+}
