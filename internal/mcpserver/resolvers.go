@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/lh-etals/favro-mcp/internal/favro"
@@ -216,9 +217,11 @@ func parseSequentialID(identifier string) (int, bool) {
 	if m == nil {
 		return 0, false
 	}
-	var n int
-	fmt.Sscanf(m[1], "%d", &n)
-	return n, n > 0
+	n, err := strconv.Atoi(m[1])
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
 }
 
 func (r *Resolver) Card(idOrName, boardID string) (*favro.Card, error) {

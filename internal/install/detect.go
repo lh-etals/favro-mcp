@@ -64,11 +64,8 @@ func exists(p string) bool {
 // which resolves a binary on PATH (which on unix, where on Windows). Returns
 // the absolute path or "" if not found.
 func which(bin string) string {
-	_, err := exec.LookPath(bin)
-	if err == nil {
-		if p, err := exec.LookPath(bin); err == nil {
-			return p
-		}
+	if p, err := exec.LookPath(bin); err == nil {
+		return p
 	}
 	return ""
 }

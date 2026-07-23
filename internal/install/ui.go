@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -102,8 +103,8 @@ func fallbackSelect(prompt string, choices []choice) []string {
 		fmt.Printf("  %s %2d. %s\n", mark, i+1, c.label)
 	}
 	fmt.Print("Enter comma-separated numbers (blank = keep * rows): ")
-	var line string
-	fmt.Scanln(&line)
+	r := bufio.NewReader(os.Stdin)
+	line, _ := r.ReadString('\n')
 	if strings.TrimSpace(line) == "" {
 		var out []string
 		for _, c := range choices {

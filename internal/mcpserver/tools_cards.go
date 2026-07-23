@@ -11,6 +11,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+const maxAttachmentBytes = 10 << 20 // 10 MB Favro attachment limit
+
 func registerCards(srv *mcp.Server, s *Server) {
 	mcp.AddTool(srv, &mcp.Tool{Name: "list_cards", Description: "List cards on a specific board with pagination. Each page returns up to 100 cards."}, s.listCards)
 	mcp.AddTool(srv, &mcp.Tool{Name: "list_custom_fields", Description: "List custom field definitions in the organization. Use the customFieldId when updating card custom fields."}, s.listCustomFields)
@@ -35,6 +37,9 @@ type listCardsArgs struct {
 }
 
 func (s *Server) listCards(_ context.Context, _ *mcp.CallToolRequest, args listCardsArgs) (*mcp.CallToolResult, any, error) {
+	if args.Page < 0 {
+		return jsonResult(nil, fmt.Errorf("page must be >= 0"))
+	}
 	if _, err := s.requireOrg(); err != nil {
 		return jsonResult(nil, err)
 	}
@@ -65,7 +70,7 @@ func (s *Server) listCards(_ context.Context, _ *mcp.CallToolRequest, args listC
 			"card_id":       c.CardID,
 			"sequential_id": c.SequentialID,
 			"name":          c.Name,
-			"column_id":     strVal(c.ColumnID),
+			"column_id":     strOr(c.ColumnID),
 			"tags":          c.Tags,
 			"archived":      c.Archived,
 		})
@@ -195,7 +200,7 @@ func (s *Server) getCardDetails(_ context.Context, _ *mcp.CallToolRequest, args 
 	result := cardToMap(c)
 	result["tasklists"] = tasklistsData
 	result["comments"] = commentsData
-	result["detailed_description"] = stripTasklistFromDescription(strVal(c.DetailedDescription), tasklistsData)
+	result["detailed_description"] = stripTasklistFromDescription(strOr(c.DetailedDescription), tasklistsData)
 	return jsonResult(result, nil)
 }
 
@@ -527,7 +532,10 @@ func (s *Server) moveCard(_ context.Context, _ *mcp.CallToolRequest, args moveCa
 	if c.WidgetCommonID != nil {
 		cardBoard = *c.WidgetCommonID
 	}
-	crossBoard := targetBoard != cardBoard
+	// Only treat this as a cross-board move when we actually know the card's
+	// board and it differs from the target. A nil WidgetCommonID must not imply
+	// a cross-board move (it would spuriously set dragMode="move").
+	crossBoard := cardBoard != "" && targetBoard != cardBoard
 	var dragMode *string
 	if crossBoard {
 		m := "move"
@@ -734,6 +742,9 @@ func (s *Server) uploadAttachment(_ context.Context, _ *mcp.CallToolRequest, arg
 	info, err := os.Stat(args.FilePath)
 	if err != nil || info.IsDir() {
 		return jsonResult(nil, fmt.Errorf("file not found: %s", args.FilePath))
+	}
+	if info.Size() > maxAttachmentBytes {
+		return jsonResult(nil, fmt.Errorf("file exceeds 10 MB limit (%d bytes)", info.Size()))
 	}
 	content, err := os.ReadFile(args.FilePath)
 	if err != nil {

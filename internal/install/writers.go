@@ -1,10 +1,13 @@
 package install
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
@@ -31,10 +34,90 @@ func entryObject(e ServerTarget) map[string]any {
 	return o
 }
 
+// envFlagArgs turns the target's env into repeated "-e KEY=VALUE" flags (keys
+// sorted for deterministic output) for CLIs that take env via flags.
+func envFlagArgs(e ServerTarget) []string {
+	if len(e.Env) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(e.Env))
+	for k := range e.Env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys)*2)
+	for _, k := range keys {
+		out = append(out, "-e", k+"="+e.Env[k])
+	}
+	return out
+}
+
 func entryEquals(a, b any) bool {
-	aj, _ := json.Marshal(a)
-	bj, _ := json.Marshal(b)
-	return string(aj) == string(bj)
+	// Normalize both sides so a nil slice/map and a missing key compare equal
+	// (e.g. an existing "args": [] vs our omitted args). Otherwise every install
+	// would be a non-idempotent rewrite.
+	return bytes.Equal(jsonBytes(normalizeForCompare(a)), jsonBytes(normalizeForCompare(b)))
+}
+
+func jsonBytes(v any) []byte {
+	b, _ := json.Marshal(v)
+	return b
+}
+
+// normalizeForCompare drops nil values and empty collections so two semantically
+// equal entries compare equal despite nil-vs-empty differences (e.g. an
+// existing "args": [] vs our omitted args, or a typed-nil []string).
+func normalizeForCompare(v any) any {
+	if isNil(v) {
+		return nil
+	}
+	switch x := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, val := range x {
+			n := normalizeForCompare(val)
+			if n == nil {
+				continue
+			}
+			if m, ok := n.(map[string]any); ok && len(m) == 0 {
+				continue
+			}
+			out[k] = n
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	case []any:
+		if len(x) == 0 {
+			return nil
+		}
+		out := make([]any, 0, len(x))
+		for _, val := range x {
+			if n := normalizeForCompare(val); n != nil {
+				out = append(out, n)
+			}
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+// isNil reports whether v is an untyped nil or a typed nil (nil slice/map/ptr).
+func isNil(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Slice, reflect.Map, reflect.Ptr, reflect.Interface, reflect.Chan, reflect.Func:
+		return rv.IsNil()
+	}
+	return false
 }
 
 // ---- JSON (mcpServers / context_servers / ...) ---------------------------
@@ -48,6 +131,9 @@ func readJSONTolerant(file string) (fresh bool, data map[string]any, err error) 
 		return false, nil, readErr
 	}
 	data = map[string]any{}
+	// Strip an optional UTF-8 BOM (some Windows editors add one); Go's
+	// encoding/json rejects it, but the host client reads the file fine.
+	raw = bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF})
 	if strings.TrimSpace(string(raw)) == "" {
 		return false, data, nil
 	}
@@ -77,7 +163,7 @@ func upsertJSONServer(file, topKey, name string, e ServerTarget, dryRun bool) (W
 		return writeOK, nil
 	}
 	data[topKey] = mergeMap(servers, map[string]any{name: obj})
-	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
 		return "", err
 	}
 	return writeOK, writeJSON(file, data)
@@ -119,7 +205,7 @@ func writeJSON(file string, data map[string]any) error {
 		return err
 	}
 	b = append(b, '\n')
-	return os.WriteFile(file, b, 0o644)
+	return os.WriteFile(file, b, 0o600)
 }
 
 func mergeMap(a, b map[string]any) map[string]any {
@@ -139,9 +225,9 @@ func tomlStr(s string) string { return fmt.Sprintf("%q", s) }
 
 func renderTomlBlock(name string, e ServerTarget) string {
 	var b strings.Builder
-	b.WriteString("\n[mcp_servers.")
-	b.WriteString(name)
-	b.WriteString("]\ncommand = ")
+	// Quote the server name so a name containing '.' (e.g. "my.server") is a
+	// single key, not nested tables.
+	fmt.Fprintf(&b, "\n[mcp_servers.%s]\ncommand = ", tomlStr(name))
 	b.WriteString(tomlStr(e.Command))
 	if len(e.Args) > 0 {
 		quoted := make([]string, len(e.Args))
@@ -170,7 +256,7 @@ func upsertTomlServer(file, name string, e ServerTarget, dryRun bool) (WriteResu
 			return writeOK, nil
 		}
 		doc := map[string]any{"mcp_servers": map[string]any{name: entryObject(e)}}
-		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
 			return "", err
 		}
 		return writeOK, writeToml(file, doc)
@@ -194,8 +280,10 @@ func upsertTomlServer(file, name string, e ServerTarget, dryRun bool) (WriteResu
 		return writeOK, nil
 	}
 	if _, present := servers[name]; !present {
-		// Append at EOF to preserve the user's comments/formatting.
-		return writeOK, os.WriteFile(file, append([]byte(renderTomlBlock(name, e)), '\n'), 0o644)
+		// Append at EOF to preserve the user's comments/formatting. Append to
+		// the existing bytes (NOT a fresh slice) so the file is not truncated.
+		block := []byte(renderTomlBlock(name, e))
+		return writeOK, os.WriteFile(file, append(raw, block...), 0o600)
 	}
 	servers[name] = obj
 	doc["mcp_servers"] = servers
@@ -240,7 +328,7 @@ func writeToml(file string, doc map[string]any) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(file, b, 0o644)
+	return os.WriteFile(file, b, 0o600)
 }
 
 // ---- YAML list (Continue ~/.continue/config.yaml -> mcpServers: [...]) ----
@@ -297,7 +385,7 @@ func upsertYamlServerList(file, name string, e ServerTarget, dryRun bool) (Write
 	}
 	rootMap["mcpServers"] = list
 	if fresh {
-		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
 			return "", err
 		}
 	}
@@ -305,7 +393,7 @@ func upsertYamlServerList(file, name string, e ServerTarget, dryRun bool) (Write
 	if err != nil {
 		return "", err
 	}
-	return writeOK, os.WriteFile(file, out, 0o644)
+	return writeOK, os.WriteFile(file, out, 0o600)
 }
 
 func removeYamlServerList(file, name string, dryRun bool) (WriteResult, error) {
@@ -350,5 +438,5 @@ func removeYamlServerList(file, name string, dryRun bool) (WriteResult, error) {
 	if err != nil {
 		return "", err
 	}
-	return writeOK, os.WriteFile(file, out, 0o644)
+	return writeOK, os.WriteFile(file, out, 0o600)
 }

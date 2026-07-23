@@ -6,14 +6,6 @@ import (
 	"github.com/lh-etals/favro-mcp/internal/favro"
 )
 
-// strVal safely dereferences a *string ("" if nil).
-func strVal(p *string) string {
-	if p == nil {
-		return ""
-	}
-	return *p
-}
-
 // cardToMap renders a Card as the JSON object returned by card-detail tools.
 func cardToMap(c *favro.Card) map[string]any {
 	assignments := make([]map[string]any, 0, len(c.Assignments))
@@ -49,14 +41,14 @@ func cardToMap(c *favro.Card) map[string]any {
 		"card_common_id":       c.CardCommonID,
 		"sequential_id":        c.SequentialID,
 		"name":                 c.Name,
-		"detailed_description": strVal(c.DetailedDescription),
-		"widget_common_id":     strVal(c.WidgetCommonID),
-		"column_id":            strVal(c.ColumnID),
-		"lane_id":              strVal(c.LaneID),
+		"detailed_description": strOr(c.DetailedDescription),
+		"widget_common_id":     strOr(c.WidgetCommonID),
+		"column_id":            strOr(c.ColumnID),
+		"lane_id":              strOr(c.LaneID),
 		"tags":                 c.Tags,
 		"assignments":          assignments,
-		"start_date":           strVal(c.StartDate),
-		"due_date":             strVal(c.DueDate),
+		"start_date":           strOr(c.StartDate),
+		"due_date":             strOr(c.DueDate),
 		"archived":             c.Archived,
 		"tasks_done":           c.TasksDone,
 		"tasks_total":          c.TasksTotal,

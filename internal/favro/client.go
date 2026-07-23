@@ -75,8 +75,8 @@ func (c *Client) do(method, path string, params url.Values, body []byte, content
 	if err != nil {
 		return nil, err
 	}
-	req.SetBasicAuth(c.email, c.token)
 	req.Header = c.headers(includeOrg)
+	req.SetBasicAuth(c.email, c.token)
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
@@ -91,7 +91,7 @@ func (c *Client) do(method, path string, params url.Values, body []byte, content
 		c.backendID = bid
 	}
 
-	text, _ := io.ReadAll(resp.Body)
+	text, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // cap at 1 MiB
 	switch {
 	case resp.StatusCode == 401:
 		return nil, &AuthError{&APIError{Status: 401, Message: "Invalid credentials"}}
@@ -166,15 +166,10 @@ func entitiesOf(data map[string]any) []map[string]any {
 }
 
 func pagesOf(data map[string]any) int {
-	switch v := data["pages"].(type) {
-	case float64:
-		if v == float64(int(v)) {
-			return int(v)
-		}
+	if v, ok := data["pages"].(float64); ok {
 		return int(v)
-	default:
-		return 1
 	}
+	return 1
 }
 
 // paginateAll fetches every page of a paginated endpoint.
@@ -190,6 +185,11 @@ func (c *Client) paginateAll(path string, params url.Values) ([]map[string]any, 
 
 	reqID, _ := data["requestId"].(string)
 	total := pagesOf(data)
+	if total > 1 && reqID == "" {
+		// The API signals more pages but gave no requestId to fetch them;
+		// returning partial data silently would be a data-loss bug.
+		return nil, fmt.Errorf("%s: paginated response has %d pages but no requestId", path, total)
+	}
 	if reqID != "" {
 		for page := 1; page < total; page++ {
 			p := url.Values{}
@@ -268,6 +268,9 @@ func decodeMany[T any](items []map[string]any) ([]T, error) {
 		v, err := decodeOne[T](m)
 		if err != nil {
 			return nil, err
+		}
+		if v == nil {
+			continue
 		}
 		out = append(out, *v)
 	}

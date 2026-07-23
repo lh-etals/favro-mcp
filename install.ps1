@@ -3,6 +3,7 @@
 #   or to register non-interactively afterwards:
 #   favro-mcp install -email you@example.com -token <token>
 $ErrorActionPreference = 'Stop'
+$ProgressPreference    = 'SilentlyContinue'  # avoid PS 5.1 IWR progress slowdown
 
 $Owner = 'lh-etals'
 $Repo  = 'favro-mcp'

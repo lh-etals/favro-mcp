@@ -37,7 +37,7 @@ func claudeDesktopConfig() string {
 	if runtime.GOOS == "darwin" {
 		return appSupport("Claude", "claude_desktop_config.json")
 	}
-	if runtime.GOOS == "win32" {
+	if runtime.GOOS == "windows" {
 		a := appData()
 		if a == "" {
 			return ""
@@ -61,7 +61,7 @@ func rooConfig() string {
 	switch runtime.GOOS {
 	case "darwin":
 		base = appSupport("Code", "User", "globalStorage")
-	case "win32":
+	case "windows":
 		a := appData()
 		if a == "" {
 			return ""
@@ -77,7 +77,7 @@ func zedConfig() string {
 	if runtime.GOOS == "darwin" {
 		return appSupport("zed", "settings.json")
 	}
-	if runtime.GOOS == "win32" {
+	if runtime.GOOS == "windows" {
 		a := appData()
 		if a == "" {
 			return ""
@@ -110,9 +110,15 @@ var Clients = []ClientDef{
 			return which("claude") != "" || exists(home(".claude.json")) || exists(home(".claude"))
 		},
 		Install: InstallKind{
-			Kind:      "command",
-			Bin:       "claude",
-			buildArgs: func(name string, e ServerTarget) []string { return []string{"mcp", "add", name, "-s", "user", "--", e.Command} },
+			Kind: "command",
+			Bin:  "claude",
+			buildArgs: func(name string, e ServerTarget) []string {
+				args := []string{"mcp", "add", name, "-s", "user"}
+				args = append(args, envFlagArgs(e)...)
+				args = append(args, "--", e.Command)
+				args = append(args, e.Args...)
+				return args
+			},
 			removeArgs: func(name string) []string { return []string{"mcp", "remove", name, "-s", "user"} },
 		},
 		ReloadHint: "restart Claude Code sessions",
