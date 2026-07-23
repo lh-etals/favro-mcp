@@ -114,7 +114,14 @@ func (c *Client) do(method, path string, params url.Values, body []byte, content
 	}
 	var data map[string]any
 	if err := json.Unmarshal(trimmed, &data); err != nil {
-		return nil, fmt.Errorf("invalid JSON response: %w", err)
+		// A few endpoints return a bare JSON array (e.g. DELETE /cards?everywhere=true
+		// returns the deleted instances). Wrap it so callers expecting an object work.
+		var arr []any
+		if err2 := json.Unmarshal(trimmed, &arr); err2 == nil {
+			data = map[string]any{"entities": arr}
+		} else {
+			return nil, fmt.Errorf("invalid JSON response: %w", err)
+		}
 	}
 	if msg, ok := data["message"].(string); ok && len(data) == 1 {
 		return nil, &APIError{Status: 200, Message: msg}

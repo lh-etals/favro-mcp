@@ -3,10 +3,12 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -68,19 +70,67 @@ func (s *Server) toolEnabled(name, tier string) bool {
 	return tierRank[s.toolset] >= tierRank[tier]
 }
 
-// jsonResult serialises a value as indented JSON text content. Passing a
-// non-nil error short-circuits to an error result.
+// jsonResult serialises a value as indented JSON text content. On error it
+// returns a clean, structured tool error (IsError=true) so the agent gets a
+// parseable, typed failure instead of a raw error string.
 func jsonResult(v any, err error) (*mcp.CallToolResult, any, error) {
 	if err != nil {
-		return nil, nil, err
+		return errorResult(err), nil, nil
 	}
 	b, mErr := json.MarshalIndent(v, "", "  ")
 	if mErr != nil {
-		return nil, nil, fmt.Errorf("failed to encode result: %w", mErr)
+		return errorResult(fmt.Errorf("failed to encode result: %w", mErr)), nil, nil
 	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
 	}, nil, nil
+}
+
+// errorResult builds a clean MCP error result: {"error":{"kind","status","message"}}.
+func errorResult(err error) *mcp.CallToolResult {
+	kind, status := classifyError(err)
+	body := map[string]any{"error": map[string]any{"kind": kind, "message": err.Error()}}
+	if status > 0 {
+		body["error"] = map[string]any{"kind": kind, "status": status, "message": err.Error()}
+	}
+	b, _ := json.Marshal(body)
+	return &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{&mcp.TextContent{Text: string(b)}},
+	}
+}
+
+// classifyError maps an error to a machine-readable kind (and HTTP status when
+// it came from the Favro API).
+func classifyError(err error) (kind string, status int) {
+	var nfe *favro.NotFoundError
+	if errors.As(err, &nfe) {
+		return "not_found", nfe.Status
+	}
+	var auth *favro.AuthError
+	if errors.As(err, &auth) {
+		if auth.Status == 403 {
+			return "forbidden", 403
+		}
+		return "authentication", auth.Status
+	}
+	var rl *favro.RateLimitError
+	if errors.As(err, &rl) {
+		return "rate_limited", 429
+	}
+	var api *favro.APIError
+	if errors.As(err, &api) {
+		return "api_error", api.Status
+	}
+	var nf *notFoundError
+	if errors.As(err, &nf) {
+		return "not_found", 0
+	}
+	var amb *ambiguousError
+	if errors.As(err, &amb) {
+		return "ambiguous", 0
+	}
+	return "error", 0
 }
 
 // mc constructs the *mcp.Server and registers every tool.

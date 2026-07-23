@@ -22,3 +22,6 @@
 /testdata/recordings/
 /testdata/recordings-*/
 
+# Dev-only capture/exploration programs (exercised against the live API).
+/dev/
+
