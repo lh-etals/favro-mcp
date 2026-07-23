@@ -55,6 +55,17 @@ class Collection(BaseModel):
     public_sharing: str | None = Field(default=None, alias="publicSharing")
 
 
+class Lane(BaseModel):
+    """Lane (swimlane) model.
+
+    Lanes are read-only in the Favro API: they are returned nested in the
+    widget object and cannot be created, updated, or deleted via the API.
+    """
+
+    lane_id: str = Field(alias="laneId")
+    name: str
+
+
 class Widget(BaseModel):
     """Widget (board) model."""
 
@@ -70,6 +81,7 @@ class Widget(BaseModel):
     breakdown_card_common_id: str | None = Field(
         default=None, alias="breakdownCardCommonId"
     )
+    lanes: list[Lane] = Field(default=[])
 
 
 class Column(BaseModel):
@@ -135,6 +147,7 @@ class Card(BaseModel):
     tasks_done: int = Field(default=0, alias="tasksDone")
     custom_fields: list[CardCustomField] = Field(default=[], alias="customFields")
     time_on_board: CardTimeOnBoard | None = Field(default=None, alias="timeOnBoard")
+    time_on_columns: dict[str, int] | None = Field(default=None, alias="timeOnColumns")
     todo_list_user_id: str | None = Field(default=None, alias="todoListUserId")
     todo_list_completed: bool | None = Field(default=None, alias="todoListCompleted")
     list_position: float | None = Field(default=None, alias="listPosition")
@@ -182,3 +195,10 @@ class Task(BaseModel):
     name: str
     completed: bool
     position: float
+
+
+class Attachment(BaseModel):
+    """Attachment model."""
+
+    name: str
+    file_url: str = Field(alias="fileURL")

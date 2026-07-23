@@ -85,6 +85,9 @@ def get_board(board_id: str, ctx: Context) -> dict[str, Any]:
                 }
                 for col in sorted(columns, key=lambda c: c.position)
             ],
+            "lanes": [
+                {"lane_id": lane.lane_id, "name": lane.name} for lane in board.lanes
+            ],
         }
 
 
@@ -115,6 +118,9 @@ def get_current_board(ctx: Context) -> dict[str, Any]:
                     "card_count": col.card_count,
                 }
                 for col in sorted(columns, key=lambda c: c.position)
+            ],
+            "lanes": [
+                {"lane_id": lane.lane_id, "name": lane.name} for lane in board.lanes
             ],
         }
 

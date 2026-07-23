@@ -5,10 +5,12 @@ from typing import Any, TypeVar
 import httpx
 
 from favro_mcp.api.models import (
+    Attachment,
     Card,
     Collection,
     Column,
     Comment,
+    Lane,
     Organization,
     Tag,
     Task,
@@ -179,6 +181,24 @@ class FavroClient:
         )
         return self._handle_response(response)
 
+    def _post_binary(
+        self,
+        path: str,
+        content: bytes,
+        params: dict[str, str] | None = None,
+        include_org: bool = True,
+    ) -> dict[str, Any]:
+        """Make a POST request with raw binary body."""
+        headers = self._get_headers(include_org)
+        headers["Content-Type"] = "application/octet-stream"
+        response = self._client.post(
+            path,
+            content=content,
+            params=params,
+            headers=headers,
+        )
+        return self._handle_response(response)
+
     def _paginate_all(
         self,
         path: str,
@@ -298,6 +318,14 @@ class FavroClient:
         data = self._get(f"/widgets/{widget_common_id}")
         return Widget.model_validate(data)
 
+    def get_lanes(self, widget_common_id: str) -> list[Lane]:
+        """Get all lanes (swimlanes) for a widget.
+
+        Lanes are read-only and returned nested in the widget object; a board
+        without lanes enabled yields an empty list.
+        """
+        return self.get_widget(widget_common_id).lanes
+
     # Column endpoints
     def get_columns(self, widget_common_id: str) -> list[Column]:
         """Get all columns for a widget."""
@@ -354,6 +382,7 @@ class FavroClient:
         card_sequential_id: int | None = None,
         todo_list: bool = False,
         unique: bool = True,
+        archived: bool | None = None,
     ) -> list[Card]:
         """Get all cards from the organization (fetches all pages).
 
@@ -364,6 +393,7 @@ class FavroClient:
             card_sequential_id: Filter by card sequential ID (e.g., 123 for #123)
             todo_list: Include todo list items
             unique: Return unique cards only
+            archived: If True, return only archived cards. If False, only non-archived.
         """
         params: dict[str, str] = {"unique": "true" if unique else "false"}
         if widget_common_id:
@@ -376,7 +406,17 @@ class FavroClient:
             params["cardSequentialId"] = str(card_sequential_id)
         if todo_list:
             params["todoList"] = "true"
-        entities = self._paginate_all("/cards", params)
+        if archived is not None:
+            params["archived"] = "true" if archived else "false"
+        params["descriptionFormat"] = "markdown"
+        try:
+            entities = self._paginate_all("/cards", params)
+        except FavroAPIError as e:
+            if e.status_code == 500 and params.get("descriptionFormat") == "markdown":
+                params.pop("descriptionFormat")
+                entities = self._paginate_all("/cards", params)
+            else:
+                raise
         return [Card.model_validate(e) for e in entities]
 
     def get_cards_page(
@@ -387,6 +427,7 @@ class FavroClient:
         card_sequential_id: int | None = None,
         todo_list: bool = False,
         unique: bool = True,
+        archived: bool | None = None,
         page: int = 0,
     ) -> tuple[list[Card], int]:
         """Get a single page of cards.
@@ -398,6 +439,7 @@ class FavroClient:
             card_sequential_id: Filter by card sequential ID (e.g., 123 for #123)
             todo_list: Include todo list items
             unique: Return unique cards only
+            archived: If True, return only archived cards. If False, only non-archived.
             page: Page number (0-indexed)
         """
         params: dict[str, str] = {"unique": "true" if unique else "false"}
@@ -411,12 +453,30 @@ class FavroClient:
             params["cardSequentialId"] = str(card_sequential_id)
         if todo_list:
             params["todoList"] = "true"
-        entities, total_pages = self._paginate_single("/cards", params, page)
+        if archived is not None:
+            params["archived"] = "true" if archived else "false"
+        params["descriptionFormat"] = "markdown"
+        try:
+            entities, total_pages = self._paginate_single("/cards", params, page)
+        except FavroAPIError as e:
+            if e.status_code == 500 and params.get("descriptionFormat") == "markdown":
+                params.pop("descriptionFormat")
+                entities, total_pages = self._paginate_single("/cards", params, page)
+            else:
+                raise
         return [Card.model_validate(e) for e in entities], total_pages
 
     def get_card(self, card_id: str) -> Card:
         """Get a specific card."""
-        data = self._get(f"/cards/{card_id}")
+        try:
+            data = self._get(
+                f"/cards/{card_id}", params={"descriptionFormat": "markdown"}
+            )
+        except FavroAPIError as e:
+            if e.status_code == 500:
+                data = self._get(f"/cards/{card_id}")
+            else:
+                raise
         return Card.model_validate(data)
 
     def create_card(
@@ -460,6 +520,7 @@ class FavroClient:
         widget_common_id: str | None = None,
         column_id: str | None = None,
         lane_id: str | None = None,
+        drag_mode: str | None = None,
         add_tags: list[str] | None = None,
         remove_tags: list[str] | None = None,
         start_date: str | None = None,
@@ -473,6 +534,10 @@ class FavroClient:
         """Update a card.
 
         Args:
+            drag_mode: How to apply a widget_common_id change. "commit" (Favro's
+                default) adds the card to the target board while keeping the
+                existing instance (a copy); "move" relocates the instance off the
+                source board. Pass "move" to move a card between boards.
             custom_fields: List of custom field updates. Each dict should contain
                 'customFieldId' and the appropriate value field for the field type:
                 - Text: {'customFieldId': '...', 'value': 'text'}
@@ -495,6 +560,8 @@ class FavroClient:
             data["columnId"] = column_id
         if lane_id is not None:
             data["laneId"] = lane_id
+        if drag_mode is not None:
+            data["dragMode"] = drag_mode
         if add_tags:
             data["addTagIds"] = add_tags
         if remove_tags:
@@ -520,6 +587,24 @@ class FavroClient:
         """Delete a card."""
         params = {"everywhere": "true"} if everywhere else None
         self._delete(f"/cards/{card_id}", params)
+
+    # Attachment endpoints
+    def upload_attachment(self, card_id: str, filename: str, content: bytes) -> Attachment:
+        """Upload a file attachment to a card.
+
+        Args:
+            card_id: The card ID to attach to
+            filename: Name for the uploaded file
+            content: Raw file bytes (max 10 MB)
+        """
+        if len(content) > 10 * 1024 * 1024:
+            raise ValueError("File size exceeds 10 MB limit")
+        data = self._post_binary(
+            f"/cards/{card_id}/attachment",
+            content=content,
+            params={"filename": filename},
+        )
+        return Attachment.model_validate(data)
 
     # Tag endpoints
     def get_tags(self) -> list[Tag]:
