@@ -35,6 +35,13 @@ func main() {
 			runInstaller(true, os.Args[2:])
 			return
 		}
+		// One-shot CLI commands (list-boards, get-card, ...) run before the
+		// bare-invocation fallthrough. They are distinct from both the
+		// interactive app (bare invocation on a TTY) and the MCP server.
+		if app.IsOneShot(os.Args[1]) {
+			app.RunOneShot(os.Args[1], os.Args[2:])
+			return
+		}
 	}
 
 	// Bare invocation: interactive app on a real terminal; otherwise (pipe,
