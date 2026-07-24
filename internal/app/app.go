@@ -157,6 +157,12 @@ func runSwitchOrg() {
 		fmt.Println()
 		return
 	}
+	if len(orgs) == 1 {
+		o := orgs[0]
+		s.SetOrg(o.OrganizationID)
+		fmt.Printf("  Only one organization: %s\n\n", styleSuccess.Render(o.Name))
+		return
+	}
 	labels := make([]string, len(orgs))
 	cur := s.OrgID()
 	for i, o := range orgs {
@@ -228,7 +234,7 @@ func runLoginFlow() {
 			fmt.Println()
 			return
 		}
-		fmt.Printf("  %s\n\n", styleSuccess.Render("Credentials verified and saved."))
+		fmt.Printf("  %s\n\n", styleSuccess.Render("Signed in as "+email))
 		return
 	}
 }
