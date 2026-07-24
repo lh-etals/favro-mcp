@@ -295,17 +295,19 @@ func RunUninstall(opts Options) error {
 	if opts.Yes {
 		chosen = detected
 	} else {
-		choices := make([]choice, 0, len(detected))
-		for _, c := range detected {
-			choices = append(choices, choice{id: c.ID, label: c.Name, checked: true})
+		rows := make([]multiRow, len(detected))
+		for i, c := range detected {
+			rows[i] = multiRow{id: c.ID, label: c.Name, checked: true}
 		}
-		ids, err := multiSelect(fmt.Sprintf("Remove %q from which clients?", name), choices)
+		out, err := runMultiSelect(fmt.Sprintf("Remove %q from which clients?", name), rows)
 		if err != nil {
 			return err
 		}
 		idSet := map[string]bool{}
-		for _, id := range ids {
-			idSet[id] = true
+		for _, r := range out {
+			if r.checked {
+				idSet[r.id] = true
+			}
 		}
 		for _, c := range Clients {
 			if idSet[c.ID] {
