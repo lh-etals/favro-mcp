@@ -74,8 +74,10 @@ favro-mcp install
 ```
 
 This scans your machine for MCP-capable clients (Claude Desktop, Claude Code,
-Cursor, Codex, Gemini CLI, Windsurf, Zed, Cline, Roo Code, Amazon Q, Continue),
-and lets you pick which to wire up with an interactive checklist. Each client's
+Cursor, Codex, Gemini CLI, Windsurf, Zed, Cline, Roo Code, Amazon Q, Continue,
+OpenCode, VS Code), and lets you pick which to wire up with an interactive
+checklist. Only detected clients are selectable; press `v` to reveal the rest.
+Each client's
 config is written **safely and idempotently** — your other servers are
 preserved, and re-running won't duplicate anything. The one-line installer
 above runs `login` then `install` for you automatically.
