@@ -9,9 +9,7 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lh-etals/favro-mcp/internal/credentials"
-	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/lh-etals/favro-mcp/internal/mcpserver"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
@@ -355,48 +353,6 @@ func runUnattended(opts Options, name, email, token string, embedCreds bool, det
 	fmt.Println()
 	fmt.Println("Run favro-mcp to configure, login, or interact with Favro from the console.")
 	return nil
-}
-
-// interactiveLogin prompts for email + token (hidden on a TTY) via the TUI,
-// verifies them against the Favro API, and saves them only on success. Loops
-// on failure. Used by RunApp's standalone "Log in to Favro" entry (the
-// installer flow folds login into its own single-program UI instead).
-func interactiveLogin(prefillEmail string) error {
-	if !isTTY() {
-		return ErrCancelled
-	}
-	for {
-		p := tea.NewProgram(newLoginModel(prefillEmail))
-		out, err := p.Run()
-		if err != nil {
-			return err
-		}
-		m := out.(loginModel)
-		if m.cancel {
-			return ErrCancelled
-		}
-		email := strings.TrimSpace(m.email.Value())
-		token := strings.TrimSpace(m.token.Value())
-		if email == "" || token == "" {
-			return ErrCancelled
-		}
-		if err := verifyAndSaveCreds(email, token); err != nil {
-			fmt.Printf("\nVerification failed: %v\nPlease try again.\n\n", err)
-			prefillEmail = email
-			continue
-		}
-		fmt.Println("Credentials verified and saved.")
-		return nil
-	}
-}
-
-// verifyAndSaveCreds checks the credentials against the live Favro API and, on
-// success, persists them. Invalid credentials are never saved.
-func verifyAndSaveCreds(email, token string) error {
-	if _, err := favro.NewClient(email, token, "").GetOrganizations(); err != nil {
-		return err
-	}
-	return credentials.Save(email, token)
 }
 
 // RunUninstall removes this server from the MCP clients the user chooses.

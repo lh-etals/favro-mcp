@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/lh-etals/favro-mcp/internal/app"
 	"github.com/lh-etals/favro-mcp/internal/credentials"
 	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/lh-etals/favro-mcp/internal/install"
@@ -40,7 +41,7 @@ func main() {
 	// MCP client, cron, ...) run the MCP server for backwards compatibility
 	// with v0.8.0 client configs that spawn `favro-mcp` with no subcommand.
 	if isTerminal() {
-		install.RunApp()
+		app.RunApp()
 		return
 	}
 	runMCPServer()
