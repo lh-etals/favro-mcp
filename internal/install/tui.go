@@ -1,162 +1,32 @@
 package install
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/term"
 
 	"github.com/lh-etals/favro-mcp/internal/mcpserver"
 )
 
-// ErrCancelled is returned when the user aborts an interactive prompt.
+// ErrCancelled is returned when the user aborts an interactive prompt, or when
+// a prompt is invoked in a non-interactive context (no TTY).
 var ErrCancelled = fmt.Errorf("cancelled")
 
-// Styling ---------------------------------------------------------------------
+var sharedReader = bufio.NewReader(os.Stdin)
 
-var (
-	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
-	subtleStyle = lipgloss.NewStyle().Faint(true)
-)
-
-// --- toolset select ----------------------------------------------------------
-
-func runToolsetHuh() (string, error) {
-	var choice string
-	opts := []huh.Option[string]{
-		huh.NewOption("Read-only", mcpserver.TierRead),
-		huh.NewOption("Read + Write (recommended)", mcpserver.TierWrite),
-		huh.NewOption("Read + Write + Delete", mcpserver.TierDelete),
-		huh.NewOption("Custom (toggle each tool)", "custom"),
-	}
-	form := huh.NewForm(
-		huh.NewGroup(huh.NewSelect[string]().
-			Title("Toolset").
-			Description("Which tools should the server expose?").
-			Options(opts...).
-			Value(&choice)),
-	)
-	if err := runForm(form); err != nil {
-		return "", err
-	}
-	return choice, nil
+func readLine() string {
+	line, _ := sharedReader.ReadString('\n')
+	return strings.TrimSpace(line)
 }
 
-// --- client multi-select -----------------------------------------------------
-
-func runClientsHuh(detected, others []ClientDef) ([]string, error) {
-	type row struct {
-		value   string
-		selected bool
-	}
-	rows := make([]row, 0, len(detected)+len(others))
-	for _, c := range detected {
-		rows = append(rows, row{value: c.ID, selected: true})
-	}
-	for _, c := range others {
-		rows = append(rows, row{value: c.ID, selected: false})
-	}
-	opts := make([]huh.Option[string], 0, len(detected)+len(others))
-	idx := 0
-	idToName := map[string]string{}
-	for _, c := range detected {
-		idToName[c.ID] = c.Name + " (detected)"
-		huhOpt := huh.NewOption(c.Name+" (detected)", c.ID)
-		huhOpt = huhOpt.Selected(true)
-		opts = append(opts, huhOpt)
-		idx++
-	}
-	_ = idx
-	for _, c := range others {
-		idToName[c.ID] = c.Name
-		opts = append(opts, huh.NewOption(c.Name, c.ID))
-	}
-	var selected []string
-	form := huh.NewForm(
-		huh.NewGroup(huh.NewMultiSelect[string]().
-			Title("AI clients").
-			Description("Select which clients to register with. Detected clients are pre-selected.").
-			Options(opts...).
-			Value(&selected)),
-	)
-	if err := runForm(form); err != nil {
-		return nil, err
-	}
-	return selected, nil
-}
-
-// --- custom tools toggle -----------------------------------------------------
-
-func runToolsHuh(catalog []mcpserver.ToolInfo) ([]string, error) {
-	opts := make([]huh.Option[string], 0, len(catalog))
-	for _, t := range catalog {
-		label := fmt.Sprintf("%s (%s)", t.Name, t.Tier)
-		opt := huh.NewOption(label, t.Name)
-		if t.Tier == mcpserver.TierRead || t.Tier == mcpserver.TierWrite {
-			opt = opt.Selected(true)
-		}
-		opts = append(opts, opt)
-	}
-	var selected []string
-	form := huh.NewForm(
-		huh.NewGroup(huh.NewMultiSelect[string]().
-			Title("Tools").
-			Description("Toggle individual tools on/off. Read+Write pre-selected.").
-			Options(opts...).
-			Value(&selected)),
-	)
-	if err := runForm(form); err != nil {
-		return nil, err
-	}
-	return selected, nil
-}
-
-// --- login inputs ------------------------------------------------------------
-
-func runLoginHuh(prefillEmail string) (email, token string, err error) {
-	email = prefillEmail
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Favro email").
-				Value(&email).
-				Validate(func(s string) error {
-					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("email is required")
-					}
-					return nil
-				}),
-			huh.NewInput().
-				Title("Favro API token").
-				EchoMode(huh.EchoModePassword).
-				Value(&token).
-				Validate(func(s string) error {
-					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("token is required")
-					}
-					return nil
-				}),
-		),
-	)
-	if e := runForm(form); e != nil {
-		return "", "", e
-	}
-	return email, token, nil
-}
-
-// --- helpers -----------------------------------------------------------------
-
-// runForm runs a huh form with proper TTY detection. On non-TTY, returns
-// ErrCancelled (the caller should fall back to flag/env values or print a hint).
-func runForm(form *huh.Form) error {
-	if !isTTY() {
-		return ErrCancelled
-	}
-	return form.Run()
-}
-
+// isTTY reports whether stdin is an interactive terminal. Prompt functions use
+// this to bail out (returning ErrCancelled) instead of hanging when fed by a
+// pipe, redirected file, or an MCP client's transport.
 func isTTY() bool {
 	fi, err := os.Stdin.Stat()
 	if err != nil {
@@ -165,38 +35,222 @@ func isTTY() bool {
 	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
+// promptSelect prints a numbered single-choice menu. Entering "0" or "q"
+// cancels. Blank input selects defaultIdx. Returns (idx, ErrCancelled) on an
+// explicit cancel.
+func promptSelect(title string, options []string, defaultIdx int) (int, error) {
+	fmt.Printf("\n  %s\n\n", title)
+	for i, o := range options {
+		marker := ""
+		if i == defaultIdx {
+			marker = " (recommended)"
+		}
+		fmt.Printf("    %d. %s%s\n", i+1, o, marker)
+	}
+	fmt.Printf("    0. Cancel\n")
+	fmt.Printf("\n  Choose [0-%d] (default %d): ", len(options), defaultIdx+1)
+	line := readLine()
+	if line == "" {
+		return defaultIdx, nil
+	}
+	if line == "q" || line == "0" {
+		return 0, ErrCancelled
+	}
+	n, err := strconv.Atoi(line)
+	if err != nil || n < 1 || n > len(options) {
+		fmt.Printf("  Invalid choice; using default.\n")
+		return defaultIdx, nil
+	}
+	return n - 1, nil
+}
+
+// --- toolset select ----------------------------------------------------------
+
+func promptToolset() (string, error) {
+	if !isTTY() {
+		return "", ErrCancelled
+	}
+	opts := []string{
+		"Read-only",
+		"Read + Write",
+		"Read + Write + Delete",
+		"Custom (toggle each tool)",
+	}
+	vals := []string{mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete, "custom"}
+	idx, err := promptSelect("Toolset - which tools should the server expose?", opts, 1)
+	if err != nil {
+		return "", err
+	}
+	return vals[idx], nil
+}
+
+// --- client multi-select -----------------------------------------------------
+
+func promptClients(detected, others []ClientDef) ([]string, error) {
+	if !isTTY() {
+		return nil, ErrCancelled
+	}
+	fmt.Printf("\n  AI Clients\n\n")
+	if len(detected) == 0 {
+		fmt.Printf("  No clients detected. You can install one (Claude Desktop,\n")
+		fmt.Printf("  Cursor, VS Code, ...) and re-run `favro-mcp configure`.\n\n")
+		if len(others) > 0 {
+			fmt.Printf("  Known but not detected:\n")
+			for _, c := range others {
+				fmt.Printf("    - %s\n", c.Name)
+			}
+			fmt.Println()
+		}
+		return nil, nil
+	}
+	num := 0
+	idByNum := map[int]string{}
+	for _, c := range detected {
+		num++
+		idByNum[num] = c.ID
+		fmt.Printf("    [x] %2d. %s (detected)\n", num, c.Name)
+	}
+	for _, c := range others {
+		num++
+		idByNum[num] = c.ID
+		fmt.Printf("    [ ] %2d. %s\n", num, c.Name)
+	}
+	fmt.Printf("\n  Enter numbers to toggle (comma-separated, blank = keep defaults, 0 = cancel): ")
+	line := readLine()
+	if line == "0" || line == "q" {
+		return nil, ErrCancelled
+	}
+	if line == "" {
+		var out []string
+		for _, c := range detected {
+			out = append(out, c.ID)
+		}
+		return out, nil
+	}
+	// Build the toggle set: start from defaults (detected on), toggle user picks.
+	selected := map[string]bool{}
+	for _, c := range detected {
+		selected[c.ID] = true
+	}
+	for _, p := range strings.Split(line, ",") {
+		n, err := strconv.Atoi(strings.TrimSpace(p))
+		if err == nil {
+			if id, ok := idByNum[n]; ok {
+				selected[id] = !selected[id]
+			}
+		}
+	}
+	var out []string
+	for _, c := range Clients {
+		if selected[c.ID] {
+			out = append(out, c.ID)
+		}
+	}
+	return out, nil
+}
+
+// --- custom tools toggle -----------------------------------------------------
+
+func promptTools(catalog []mcpserver.ToolInfo) ([]string, error) {
+	if !isTTY() {
+		return nil, ErrCancelled
+	}
+	fmt.Printf("\n  Toggle tools\n\n")
+	num := 0
+	nameByNum := map[int]string{}
+	selected := map[string]bool{}
+	for _, t := range catalog {
+		num++
+		nameByNum[num] = t.Name
+		isOn := t.Tier == mcpserver.TierRead || t.Tier == mcpserver.TierWrite
+		selected[t.Name] = isOn
+		mark := "[ ]"
+		if isOn {
+			mark = "[x]"
+		}
+		fmt.Printf("    %s %2d. %-22s (%s)\n", mark, num, t.Name, t.Tier)
+	}
+	fmt.Printf("\n  Enter numbers to toggle (comma-separated, blank = keep defaults, 0 = cancel): ")
+	line := readLine()
+	if line == "0" || line == "q" {
+		return nil, ErrCancelled
+	}
+	if line != "" {
+		for _, p := range strings.Split(line, ",") {
+			n, err := strconv.Atoi(strings.TrimSpace(p))
+			if err == nil {
+				if name, ok := nameByNum[n]; ok {
+					selected[name] = !selected[name]
+				}
+			}
+		}
+	}
+	var out []string
+	for _, t := range catalog {
+		if selected[t.Name] {
+			out = append(out, t.Name)
+		}
+	}
+	return out, nil
+}
+
+// --- login inputs ------------------------------------------------------------
+
+// promptLogin reads the Favro email (echoed) and API token (hidden on a TTY via
+// term.ReadPassword). An empty email or token returns ErrCancelled.
+func promptLogin(prefillEmail string) (email, token string, err error) {
+	fmt.Printf("\n  Log in to Favro\n\n")
+	fmt.Printf("  Email: ")
+	email = readLine()
+	if email == "" && prefillEmail != "" {
+		email = prefillEmail
+	}
+	if email == "" {
+		return "", "", ErrCancelled
+	}
+	fmt.Printf("  API token (hidden): ")
+	fd := int(os.Stdin.Fd())
+	if term.IsTerminal(fd) {
+		b, rerr := term.ReadPassword(fd)
+		if rerr != nil {
+			return "", "", rerr
+		}
+		token = strings.TrimSpace(string(b))
+		fmt.Println()
+	} else {
+		token = readLine()
+	}
+	if token == "" {
+		return "", "", ErrCancelled
+	}
+	return email, token, nil
+}
+
 // --- interactive app (bare invocation) ---------------------------------------
 
-// RunApp is the interactive CLI app launched by bare `favro-mcp`. It shows a
-// main menu with navigation and configuration options.
+// RunApp is the interactive CLI app launched by bare `favro-mcp` on a real
+// terminal. It shows a simple numbered menu.
 func RunApp() {
 	for {
-		var action string
-		form := huh.NewForm(
-			huh.NewGroup(huh.NewSelect[string]().
-				Title("favro-mcp").
-				Description("What would you like to do?").
-				Options(
-					huh.NewOption("Configure AI clients", "configure"),
-					huh.NewOption("Log in to Favro", "login"),
-					huh.NewOption("Quit", "quit"),
-				).
-				Value(&action)),
-		)
-		if err := form.Run(); err != nil {
-			return // user cancelled or pipe closed
-		}
-		switch action {
-		case "quit":
+		fmt.Print("\n  favro-mcp\n\n")
+		fmt.Println("    1. Configure AI clients")
+		fmt.Println("    2. Log in to Favro")
+		fmt.Println("    3. Quit")
+		fmt.Print("\n  Choose [1-3]: ")
+		choice := readLine()
+		switch choice {
+		case "1":
+			if err := RunInstall(Options{}); err != nil && !errors.Is(err, ErrCancelled) {
+				fmt.Fprintln(os.Stderr, "  Error:", err)
+			}
+		case "2":
+			if err := interactiveLogin(""); err != nil && !errors.Is(err, ErrCancelled) {
+				fmt.Fprintln(os.Stderr, "  Error:", err)
+			}
+		case "3", "q", "quit", "":
 			return
-		case "configure":
-			if err := RunInstall(Options{}); err != nil && err != ErrCancelled {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		case "login":
-			if err := interactiveLogin(""); err != nil && err != ErrCancelled {
-				fmt.Fprintln(os.Stderr, err)
-			}
+		default:
+			fmt.Println("  Invalid choice.")
 		}
 	}
 }

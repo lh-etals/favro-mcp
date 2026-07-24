@@ -2,6 +2,7 @@ package install
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -205,11 +206,19 @@ func RunInstall(opts Options) error {
 			fmt.Println("No supported clients known for this platform.")
 			return nil
 		}
-		// TUI multi-select: only detected are selectable (pre-checked); press
-		// `v` to reveal the non-detected ones (greyed, not selectable).
-		ids, err := runClientsHuh(detected, others)
+		// Numbered multi-select: detected clients are pre-checked, others can
+		// be toggled on by number. On a non-TTY the prompt returns
+		// ErrCancelled and we fall back to all detected clients (--yes mode).
+		ids, err := promptClients(detected, others)
 		if err != nil {
-			return err
+			if !errors.Is(err, ErrCancelled) || isTTY() {
+				return err
+			}
+			// Non-interactive: fall back to all detected clients.
+			ids = nil
+			for _, c := range detected {
+				ids = append(ids, c.ID)
+			}
 		}
 		idSet := map[string]bool{}
 		for _, id := range ids {
@@ -243,11 +252,12 @@ func RunInstall(opts Options) error {
 	return nil
 }
 
-// interactiveLogin prompts for email + token (hidden) via the TUI, verifies them
-// against the Favro API, and saves them only on success. Loops on failure.
+// interactiveLogin prompts for email + token (hidden on a TTY) via the TUI,
+// verifies them against the Favro API, and saves them only on success. Loops
+// on failure.
 func interactiveLogin(prefillEmail string) error {
 	for {
-		email, token, err := runLoginHuh(prefillEmail)
+		email, token, err := promptLogin(prefillEmail)
 		if err != nil {
 			return err // includes ErrCancelled
 		}
@@ -398,7 +408,8 @@ func describeRemove(r ApplyResult, dryRun bool) string {
 //   - read / write / delete  -> FAVRO_TOOLSET=<tier>
 //   - custom                 -> FAVRO_TOOLS=<comma list of enabled tools>
 //
-// Interactive (TUI) when neither --yes nor an explicit --toolset is given.
+// Interactive when neither --yes nor an explicit --toolset is given AND stdin
+// is a TTY. In a non-interactive context it defaults to Read + Write.
 func chooseToolset(opts Options) (map[string]string, error) {
 	switch opts.Toolset {
 	case mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete:
@@ -407,16 +418,20 @@ func chooseToolset(opts Options) (map[string]string, error) {
 		if opts.Yes {
 			return nil, fmt.Errorf("--toolset=custom requires interactive selection (omit --yes)")
 		}
+		if !isTTY() {
+			return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}, nil
+		}
 		return pickCustomTools()
 	case "":
 	default:
 		return nil, fmt.Errorf("unknown --toolset %q (use read, write, delete, or custom)", opts.Toolset)
 	}
-	if opts.Yes {
+	if opts.Yes || !isTTY() {
 		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}, nil
 	}
-	choice, err := runToolsetHuh()
+	choice, err := promptToolset()
 	if err != nil {
+		// ErrCancelled on a TTY = explicit cancel; propagate so the install aborts.
 		return nil, err
 	}
 	if choice == "custom" {
@@ -429,7 +444,7 @@ func chooseToolset(opts Options) (map[string]string, error) {
 // off) and returns a FAVRO_TOOLS allowlist of the selected tool names.
 func pickCustomTools() (map[string]string, error) {
 	catalog := mcpserver.ToolCatalog()
-	ids, err := runToolsHuh(catalog)
+	ids, err := promptTools(catalog)
 	if err != nil {
 		return nil, err
 	}

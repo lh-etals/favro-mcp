@@ -1,9 +1,7 @@
 # favro-mcp installer (Windows). Run in PowerShell:
 #   irm https://github.com/lh-etals/favro-mcp/raw/main/install.ps1 | iex
-#   or to register non-interactively afterwards:
-#   favro-mcp install -email you@example.com -token <token>
 $ErrorActionPreference = 'Stop'
-$ProgressPreference    = 'SilentlyContinue'  # avoid PS 5.1 IWR progress slowdown
+$ProgressPreference    = 'SilentlyContinue'
 
 $Owner = 'lh-etals'
 $Repo  = 'favro-mcp'
@@ -13,7 +11,7 @@ $arch = $env:PROCESSOR_ARCHITECTURE
 switch ($arch) {
   { $_ -in 'AMD64','x64' } { $target = 'windows-amd64' }
   'ARM64'                  { $target = 'windows-arm64' }
-  default                  { Write-Error "Unsupported architecture: $arch"; exit 1 }
+  default                  { Write-Host "  Unsupported architecture: $arch" -ForegroundColor Red; return }
 }
 
 $Asset = "favro-mcp-$target.exe"
@@ -24,39 +22,85 @@ $InstallDir = Join-Path $env:LOCALAPPDATA 'favro-mcp'
 $Target     = Join-Path $InstallDir 'favro-mcp.exe'
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-Write-Host "Downloading favro-mcp ($target)..."
+# --- download with progress bar -------------------------------------------
+Write-Host ""
+Write-Host "  favro-mcp installer" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Downloading $Asset..."
+
+$request = $null
+$response = $null
+$stream = $null
+$fs = $null
 try {
-  Invoke-WebRequest -Uri $Url -OutFile $Target -UseBasicParsing
+  $request = [System.Net.HttpWebRequest]::Create($Url)
+  $request.Method = "GET"
+  $response = $request.GetResponse()
+  $total = [int]$response.ContentLength
+  $stream = $response.GetResponseStream()
+  $fs = [System.IO.File]::Create($Target)
+  $buffer = New-Object byte[] 65536
+  $downloaded = 0
+  $sw = [System.Diagnostics.Stopwatch]::StartNew()
+  $lastUpdate = 0
+
+  $renderBar = {
+    param($dl, $tot, $el)
+    $pct = if ($tot -gt 0) { [math]::Round($dl / $tot * 100) } else { 0 }
+    if ($pct -gt 100) { $pct = 100 }
+    $filled = [math]::Floor($pct / 5)
+    if ($filled -gt 20) { $filled = 20 }
+    $bar = ('#' * $filled).PadRight(20)
+    $dlMB = [math]::Round($dl / 1048576, 1)
+    $totMB = [math]::Round($tot / 1048576, 1)
+    $speed = if ($el -gt 0) { [math]::Round($dlMB / $el, 1) } else { 0 }
+    $eta = if ($speed -gt 0) { [math]::Round((($totMB - $dlMB)) / $speed) } else { 0 }
+    $line = ("  [{0}] {1,3}%  {2}/{3} MB  {4} MB/s  ETA {5:00}s" -f $bar, $pct, $dlMB, $totMB, $speed, $eta)
+    # Pad so shorter lines fully overwrite the previous render (no stale chars).
+    Write-Host ("`r{0}" -f $line.PadRight(72)) -NoNewline
+  }
+
+  while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+    $fs.Write($buffer, 0, $read)
+    $downloaded += $read
+    $now = [System.Environment]::TickCount
+    if ($now - $lastUpdate -gt 200) {
+      $lastUpdate = $now
+      & $renderBar $downloaded $total $sw.Elapsed.TotalSeconds
+    }
+  }
+  # Force a final 100% render.
+  & $renderBar $downloaded $total $sw.Elapsed.TotalSeconds
+  Write-Host ""
 } catch {
-  Write-Error "Download failed: $_"
-  exit 1
+  Write-Host ""
+  Write-Host "  Download failed: $_" -ForegroundColor Red
+  Write-Host "  URL: $Url" -ForegroundColor Red
+  return
+} finally {
+  if ($fs -ne $null) { $fs.Close() }
+  if ($stream -ne $null) { $stream.Close() }
+  if ($response -ne $null) { $response.Close() }
+}
+# Clean up a partial / zero-byte download so a later retry starts fresh.
+if (-not (Test-Path $Target) -or (Get-Item $Target).Length -eq 0) {
+  Remove-Item $Target -ErrorAction SilentlyContinue
+  Write-Host "  Download did not complete; nothing was installed." -ForegroundColor Red
+  return
 }
 
-# --- add to user PATH if missing ------------------------------------------
+# --- add to user PATH if missing (silent on success) -----------------------
 $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
 if ($userPath -notlike "*$InstallDir*") {
   $newPath = if ($userPath) { "$InstallDir;$userPath" } else { $InstallDir }
   [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
-  Write-Host "Added $InstallDir to your user PATH."
-  Write-Host "Restart your terminal for PATH to take effect."
-} else {
-  Write-Host "$InstallDir is already on your user PATH."
 }
 
+# --- launch the configurer --------------------------------------------------
 Write-Host ""
-Write-Host "Installed: $Target"
-
-# Run the interactive setup right away (login if needed, then toolset + clients).
-# PowerShell's host is interactive, so the child processes inherit the console.
-if ($Host.Name -eq 'ConsoleHost') {
-  $credFile = Join-Path $env:USERPROFILE '.favro-mcp\credentials.json'
-  if (Test-Path $credFile) {
-    Write-Host "Favro credentials already configured (run 'favro-mcp login' to change)."
-  }
-  Write-Host ""
-  Write-Host "=== Configuring favro-mcp (login + toolset + clients) ==="
+try {
   & $Target configure
-} else {
-  Write-Host ""
-  Write-Host "Then run:  favro-mcp configure"
+} catch {
+  Write-Host "  configure did not complete: $_" -ForegroundColor Red
+  Write-Host "  Re-run 'favro-mcp configure' later to finish setup." -ForegroundColor Yellow
 }

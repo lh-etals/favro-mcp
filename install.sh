@@ -29,18 +29,28 @@ INSTALL_DIR="$HOME/.favro-mcp/bin"
 TARGET="$INSTALL_DIR/favro-mcp"
 mkdir -p "$INSTALL_DIR"
 
-printf 'Downloading favro-mcp (%s/%s)...\n' "$os" "$arch"
+printf '\n  favro-mcp installer\n\n  Downloading...\n\n'
+# curl --progress-bar writes the bar to stderr so it shows under `sh` but
+# never pollutes the captured stdout of `curl | sh`.
 if command -v curl >/dev/null 2>&1; then
-  curl -fsSL "$URL" -o "$TARGET"
+  if ! curl -fSL --progress-bar "$URL" -o "$TARGET"; then
+    printf '\n  Download failed. Please check your connection and try again.\n  URL: %s\n' "$URL" >&2
+    rm -f "$TARGET"
+    exit 1
+  fi
 elif command -v wget >/dev/null 2>&1; then
-  wget -qO "$TARGET" "$URL"
+  if ! wget -q --show-progress -O "$TARGET" "$URL"; then
+    printf '\n  Download failed. Please check your connection and try again.\n  URL: %s\n' "$URL" >&2
+    rm -f "$TARGET"
+    exit 1
+  fi
 else
   printf 'Neither curl nor wget is available; cannot download.\n' >&2
   exit 1
 fi
 chmod +x "$TARGET"
 
-# --- add to PATH if missing ------------------------------------------------
+# --- add to PATH if missing (silent on success) ----------------------------
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) on_path=1 ;;
   *) on_path=0 ;;
@@ -52,14 +62,11 @@ if [ "$on_path" -eq 0 ]; then
     [ -f "$rc" ] || continue
     if ! grep -qF "$INSTALL_DIR" "$rc" 2>/dev/null; then
       printf '\n# added by favro-mcp installer\n%s\n' "$line" >> "$rc"
-      printf 'Added PATH entry to %s\n' "$rc"
     fi
     on_path=2
     break
   done
 fi
-
-printf '\nInstalled: %s\n' "$TARGET"
 
 # If we have a controlling terminal, run the interactive setup right away. Under
 # `curl | sh` stdin is the script pipe, so we read from /dev/tty to reach the
@@ -70,14 +77,6 @@ if [ -t 0 ] || [ -e /dev/tty ]; then
   fi
   printf '\n=== Configuring favro-mcp (login + toolset + clients) ===\n'
   "$TARGET" configure </dev/tty || printf '  (configure skipped or failed; run `favro-mcp configure` later)\n'
-  if [ "$on_path" -eq 0 ]; then
-    printf '\nNote: favro-mcp is at %s — reopen your shell or add it to PATH first.\n' "$INSTALL_DIR"
-  fi
 else
-  if [ "$on_path" -eq 2 ]; then
-    printf 'Restart your shell (or open a new one) so "favro-mcp" is on PATH.\n'
-  elif [ "$on_path" -eq 0 ]; then
-    printf 'Add it to PATH manually:\n  export PATH="%s:$PATH"\n' "$INSTALL_DIR"
-  fi
   printf '\nThen run:\n  favro-mcp configure\n'
 fi

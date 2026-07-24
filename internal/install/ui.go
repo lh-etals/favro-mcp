@@ -1,7 +1,6 @@
 package install
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -10,50 +9,15 @@ import (
 )
 
 // choice represents one selectable client row.
-var sharedReader *bufio.Reader
-
-func sharedStdinReader() *bufio.Reader {
-	if sharedReader == nil {
-		sharedReader = bufio.NewReader(os.Stdin)
-	}
-	return sharedReader
-}
-
 type choice struct {
 	id      string
 	label   string
 	checked bool
 }
 
-// selectOne prints a numbered single-choice prompt and returns the chosen index.
-// Blank input selects defaultIdx.
-func selectOne(prompt string, options []string, defaultIdx int) int {
-	fmt.Println(prompt)
-	for i, o := range options {
-		mark := ""
-		if i == defaultIdx {
-			mark = " (default)"
-		}
-		fmt.Printf("  %d. %s%s\n", i+1, o, mark)
-	}
-	fmt.Printf("Choose [1-%d]: ", len(options))
-	r := sharedStdinReader()
-	line, _ := r.ReadString('\n')
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return defaultIdx
-	}
-	var n int
-	if _, err := fmt.Sscanf(line, "%d", &n); err == nil && n >= 1 && n <= len(options) {
-		return n - 1
-	}
-	fmt.Println("Invalid choice; using default.")
-	return defaultIdx
-}
-
-// multiSelect shows an interactive checkbox list and returns the IDs of the
-// checked rows. Falls back to a plain numbered prompt when stdin is not a TTY
-// or raw mode is unavailable.
+// multiSelect shows an interactive checkbox list (arrow keys, space toggle,
+// enter confirm) and returns the IDs of the checked rows. Falls back to a
+// plain numbered prompt when stdin is not a TTY or raw mode is unavailable.
 func multiSelect(prompt string, choices []choice) ([]string, error) {
 	if len(choices) == 0 {
 		return nil, nil
@@ -74,7 +38,7 @@ func multiSelect(prompt string, choices []choice) ([]string, error) {
 		var b strings.Builder
 		b.WriteString("\r\033[K")
 		b.WriteString(prompt)
-		b.WriteString("  (↑/↓ move, space toggle, enter confirm)\n")
+		b.WriteString("  (up/down move, space toggle, enter confirm)\n")
 		for i, c := range choices {
 			marker := " "
 			if c.checked {
@@ -122,7 +86,7 @@ func multiSelect(prompt string, choices []choice) ([]string, error) {
 	}
 }
 
-// fallbackSelect is a non-TTY, line-based prompt (detected rows pre-checked).
+// fallbackSelect is a non-TTY, line-based prompt (checked rows pre-selected).
 func fallbackSelect(prompt string, choices []choice) []string {
 	fmt.Println(prompt)
 	for i, c := range choices {
@@ -133,7 +97,7 @@ func fallbackSelect(prompt string, choices []choice) []string {
 		fmt.Printf("  %s %2d. %s\n", mark, i+1, c.label)
 	}
 	fmt.Print("Enter comma-separated numbers (blank = keep * rows): ")
-	r := sharedStdinReader()
+	r := sharedReader
 	line, _ := r.ReadString('\n')
 	if strings.TrimSpace(line) == "" {
 		var out []string

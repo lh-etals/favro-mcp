@@ -18,7 +18,7 @@ import (
 
 func main() {
 	// Subcommands route to specific functions. Bare invocation (no args) opens
-	// the interactive app on a TTY, or prints a hint on a pipe.
+	// the interactive app on a real TTY, otherwise runs the MCP server.
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "mcp", "serve":
@@ -36,14 +36,14 @@ func main() {
 		}
 	}
 
-	// Bare invocation: interactive app on a TTY; hint on a pipe.
+	// Bare invocation: interactive app on a real terminal; otherwise (pipe,
+	// MCP client, cron, ...) run the MCP server for backwards compatibility
+	// with v0.8.0 client configs that spawn `favro-mcp` with no subcommand.
 	if isTerminal() {
 		install.RunApp()
 		return
 	}
-	// Non-interactive (piped, cron, etc.): print a hint, don't hang.
-	fmt.Println("favro-mcp - MCP server for Favro.")
-	fmt.Println("Run 'favro-mcp' in a terminal for the interactive app, or 'favro-mcp mcp' for the MCP server.")
+	runMCPServer()
 }
 
 // isTerminal returns true if stdin AND stdout are TTYs.
