@@ -1,7 +1,7 @@
 // Package app implements the interactive CLI app shell that a bare
-// `favro-mcp` invocation opens on a real terminal. It owns the top-level
-// arrow-key menu whose contents depend on login state and dispatches into
-// installer / data / login flows.
+// `favro-mcp` invocation opens on a real terminal. The ENTIRE app runs as ONE
+// tea.Program (no alt-screen) so bubbletea's inline renderer redraws a single
+// evolving screen in place instead of appending a new block per step.
 package app
 
 import (
@@ -25,250 +25,924 @@ func isTerminal() bool {
 	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 }
 
-// RunApp is the interactive CLI app. Shows a state-dependent main menu:
-//   - Logged out: Log in, Configure AI clients, Quit
-//   - Logged in:  Browse boards, List cards, View card detail, Users, Tags,
-//     Switch organization, Configure AI clients, Log out, Quit
-//
-// It uses bubbletea inline mode (no alt-screen) and loops until the user quits.
+// RunApp is the interactive CLI app. It builds a single appModel and runs it
+// in one tea.Program. When the user picks "Configure AI clients" the program
+// quits with reconfigure=true; RunApp then launches the installer (which has
+// its own TUI) and re-opens the app program afterwards.
 func RunApp() {
 	if !isTerminal() {
 		fmt.Fprintln(os.Stderr, "favro-mcp: not a terminal. Run `favro-mcp mcp` to start the MCP server.")
 		return
 	}
+	m := newAppModel()
 	for {
-		loggedIn := credentials.Exists()
-		items := buildMenu(loggedIn)
-		labels := make([]string, len(items))
-		for i, it := range items {
-			labels[i] = it.label
-		}
-		title := "favro-mcp"
-		if loggedIn {
-			if s, err := NewSession(); err == nil {
-				title = "favro-mcp  " + s.email
-			}
-		}
-		m := selectModel{
-			title:   title,
-			options: labels,
-			footer:  "up/down move . enter select . q quit",
-		}
 		p := tea.NewProgram(m)
-		out, err := p.Run()
-		if err != nil {
+		if _, err := p.Run(); err != nil {
 			fmt.Fprintln(os.Stderr, "  Error:", err)
 			return
 		}
-		r := out.(selectModel)
-		if r.cancel || r.cursor < 0 || r.cursor >= len(items) {
+		if !m.reconfigure {
 			return
 		}
-		action := items[r.cursor].action
-		if action == nil { // Quit
+		// Hand the TTY off to the installer, then resume the app.
+		m.reconfigure = false
+		if err := install.RunInstall(install.Options{}); err != nil && !errors.Is(err, install.ErrCancelled) {
+			fmt.Fprintln(os.Stderr, styleError.Render("  Error: "+err.Error()))
 			return
 		}
-		action()
+		// Refresh login state in case the installer wrote new creds.
+		m.session, _ = NewSession()
+		m.step = stepMenu
+		m.err = ""
+		m.rebuildMenu()
 	}
 }
 
-// menuItem pairs a menu label with the action that runs when it is selected. A
-// nil action means "quit the app".
-type menuItem struct {
-	label  string
-	action func()
+// ===========================================================================
+// Unified appModel
+// ===========================================================================
+
+// step identifies one screen of the unified appModel state machine.
+type step int
+
+const (
+	stepMenu step = iota
+	stepLoading
+	stepLogin
+	stepVerifying
+	stepSwitchOrg
+	stepBoardsPickCollection
+	stepBoardsPickBoard
+	stepCards
+	stepCardPrompt // entering a card identifier (no preselected card)
+	stepCardDetail
+	stepUsers
+	stepTags
+	stepScroll // generic scroll fallback (currently used for account info)
+)
+
+// appModel owns every screen of the interactive app. All sub-models are
+// embedded fields so their state survives step transitions; the active one is
+// selected by `step` in Update/View.
+type appModel struct {
+	step         step
+	reconfigure  bool // set when user picked Configure; RunApp re-runs installer after exit
+	loadingLabel string
+
+	session *Session // nil when not logged in
+
+	// Reusable sub-models.
+	selectModel selectModel     // menu, switch-org, collection/board/card pickers
+	loginModel  loginModel      // email + token form
+	cardPrompt  cardPromptModel // single textinput for card identifier
+	scroll      scrollTextModel // card detail / users / tags / account info
+
+	// Data caches filled by tea.Cmds.
+	orgs        []favro.Organization
+	collections []favro.Collection
+	boards      []favro.Widget
+	cards       []favro.Card
+	page        int
+	totalPages  int
+	pendingCard *favro.Card // card chosen from the list, awaiting detail load
+
+	// err holds a transient error rendered inside the current step (cleared on
+	// the next navigation key).
+	err string
 }
 
-func buildMenu(loggedIn bool) []menuItem {
-	if !loggedIn {
-		return []menuItem{
-			{label: "Log in to Favro", action: runLoginFlow},
-			{label: "Configure AI clients", action: runConfigure},
-			{label: "Quit", action: nil},
+func newAppModel() *appModel {
+	m := &appModel{step: stepMenu}
+	m.session, _ = NewSession() // nil if not logged in
+	m.rebuildMenu()
+	return m
+}
+
+// rebuildMenu resets selectModel to show the main menu for the current login
+// state.
+func (m *appModel) rebuildMenu() {
+	loggedIn := m.session != nil
+	title := "favro-mcp"
+	if loggedIn {
+		title = "favro-mcp  " + m.session.email
+	}
+	m.selectModel = selectModel{
+		title:   title,
+		options: menuLabels(loggedIn),
+		footer:  "up/down move . enter select . q quit",
+	}
+}
+
+func menuLabels(loggedIn bool) []string {
+	items := buildMenu(loggedIn)
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = it.label
+	}
+	return out
+}
+
+func (m *appModel) Init() tea.Cmd { return nil }
+
+func (m *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Ctrl+c always quits immediately, regardless of step.
+	if k, ok := msg.(tea.KeyMsg); ok && k.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+
+	// Async results land here regardless of step.
+	switch msg := msg.(type) {
+	case orgsLoadedMsg:
+		return m.onOrgsLoaded(msg)
+	case collectionsLoadedMsg:
+		return m.onCollectionsLoaded(msg)
+	case boardsLoadedMsg:
+		return m.onBoardsLoaded(msg)
+	case cardsLoadedMsg:
+		return m.onCardsLoaded(msg)
+	case usersLoadedMsg:
+		return m.onUsersLoaded(msg)
+	case tagsLoadedMsg:
+		return m.onTagsLoaded(msg)
+	case cardResolvedMsg:
+		return m.onCardResolved(msg)
+	case cardDetailLoadedMsg:
+		return m.onCardDetailLoaded(msg)
+	case credsVerifiedMsg:
+		return m.onCredsVerified(msg)
+	}
+
+	// Steps with textinputs need non-key messages (blink, window-size).
+	switch m.step {
+	case stepLogin:
+		return m.updateLogin(msg)
+	case stepCardPrompt:
+		return m.updateCardPrompt(msg)
+	}
+
+	// Scroll steps must forward WindowSizeMsg to the viewport.
+	if isScrollStep(m.step) {
+		if ws, ok := msg.(tea.WindowSizeMsg); ok {
+			newM, cmd := m.scroll.Update(ws)
+			if sm, ok2 := newM.(scrollTextModel); ok2 {
+				m.scroll = sm
+			}
+			return m, cmd
 		}
 	}
-	return []menuItem{
-		{label: "Browse boards", action: runBrowseBoards},
-		{label: "List cards", action: runListCards},
-		{label: "View card detail", action: runViewCardDetail},
-		{label: "Users", action: runUsers},
-		{label: "Tags", action: runTags},
-		{label: "Switch organization", action: runSwitchOrg},
-		{label: "Configure AI clients", action: runConfigure},
-		{label: "Log out", action: showAccountInfo},
-		{label: "Quit", action: nil},
+
+	k, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
 	}
+
+	switch m.step {
+	case stepMenu:
+		return m.updateMenu(k)
+	case stepSwitchOrg:
+		return m.updateSwitchOrg(k)
+	case stepBoardsPickCollection:
+		return m.updatePickCollection(k)
+	case stepBoardsPickBoard:
+		return m.updatePickBoard(k)
+	case stepCards:
+		return m.updateCards(k)
+	case stepCardDetail, stepUsers, stepTags, stepScroll:
+		return m.updateScroll(k)
+	case stepLoading, stepVerifying:
+		// Wait for the async result; ignore keys (ctrl+c handled above).
+		return m, nil
+	}
+	return m, nil
 }
 
-// --- actions ---------------------------------------------------------------
-
-func runConfigure() {
-	fmt.Println()
-	if err := install.RunInstall(install.Options{}); err != nil && !errors.Is(err, install.ErrCancelled) {
-		fmt.Fprintln(os.Stderr, styleError.Render("  Error: "+err.Error()))
+func isScrollStep(s step) bool {
+	switch s {
+	case stepCardDetail, stepUsers, stepTags, stepScroll:
+		return true
 	}
-	fmt.Println()
+	return false
 }
 
-// showAccountInfo doubles as the "Log out" entry: rather than deleting stored
-// credentials, it shows the active account and hints at `favro-mcp login` to
-// switch.
-func showAccountInfo() {
-	fmt.Println()
-	s, err := NewSession()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, styleError.Render("  Not logged in."))
-		fmt.Println()
-		return
+// --- menu step --------------------------------------------------------------
+
+func (m *appModel) updateMenu(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Any key dismisses a stale menu error.
+	m.err = ""
+	switch k.String() {
+	case "q", "esc":
+		return m, tea.Quit
+	case "up", "k":
+		if m.selectModel.cursor > 0 {
+			m.selectModel.cursor--
+		}
+	case "down", "j":
+		if m.selectModel.cursor < len(m.selectModel.options)-1 {
+			m.selectModel.cursor++
+		}
+	case "enter":
+		return m.chooseMenu()
 	}
-	fmt.Printf("  Logged in as: %s\n", s.email)
-	if id := s.OrgID(); id != "" {
-		fmt.Printf("  Active org:   %s\n", id)
-	} else {
-		fmt.Printf("  Active org:   %s\n", styleDim.Render("(none selected)"))
-	}
-	fmt.Println(styleDim.Render("  Run `favro-mcp login` to switch accounts."))
-	fmt.Println()
+	return m, nil
 }
 
-// runSwitchOrg lists the user's organizations and sets the active one.
-func runSwitchOrg() {
-	fmt.Println()
-	s, err := NewSession()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, styleError.Render("  Not logged in."))
-		fmt.Println()
-		return
+func (m *appModel) chooseMenu() (tea.Model, tea.Cmd) {
+	items := buildMenu(m.session != nil)
+	if m.selectModel.cursor < 0 || m.selectModel.cursor >= len(items) {
+		return m, tea.Quit
 	}
-	orgs, err := s.Client().GetOrganizations()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, styleError.Render("  Failed to load organizations: "+err.Error()))
-		fmt.Println()
-		return
+	switch items[m.selectModel.cursor].choice {
+	case menuQuit:
+		return m, tea.Quit
+	case menuConfigure:
+		// Installer has its own TUI; hand the TTY off after quitting ours.
+		m.reconfigure = true
+		return m, tea.Quit
+	case menuLogin:
+		m.step = stepLogin
+		m.loginModel = newLoginModel("")
+		m.loginModel.email.Focus()
+		m.loginModel.token.Blur()
+		return m, textinput.Blink
+	case menuBrowseBoards:
+		if !m.requireOrgOrError() {
+			return m, nil
+		}
+		m.step = stepLoading
+		m.loadingLabel = "Loading collections..."
+		return m, loadCollectionsCmd(m.session)
+	case menuListCards:
+		if !m.requireOrgOrError() {
+			return m, nil
+		}
+		if m.session.BoardID() == "" {
+			m.err = "No board selected. Use Browse boards first."
+			return m, nil
+		}
+		m.step = stepLoading
+		m.loadingLabel = "Loading cards..."
+		m.page = 0
+		return m, loadCardsCmd(m.session, m.session.BoardID(), 0)
+	case menuViewCardDetail:
+		if !m.requireOrgOrError() {
+			return m, nil
+		}
+		m.step = stepCardPrompt
+		m.cardPrompt = newCardPromptModel()
+		m.pendingCard = nil
+		return m, textinput.Blink
+	case menuUsers:
+		if !m.requireOrgOrError() {
+			return m, nil
+		}
+		m.step = stepLoading
+		m.loadingLabel = "Loading users..."
+		return m, loadUsersCmd(m.session)
+	case menuTags:
+		if !m.requireOrgOrError() {
+			return m, nil
+		}
+		m.step = stepLoading
+		m.loadingLabel = "Loading tags..."
+		return m, loadTagsCmd(m.session)
+	case menuSwitchOrg:
+		m.step = stepLoading
+		m.loadingLabel = "Loading organizations..."
+		return m, loadOrgsCmd(m.session)
+	case menuLogout:
+		// "Log out" actually shows the active account info.
+		text, title := buildAccountInfoText(m.session)
+		m.scroll = newScrollTextModel(title, text)
+		m.step = stepScroll
+		return m, nil
 	}
-	if len(orgs) == 0 {
-		fmt.Println(styleDim.Render("  Your account has no organizations."))
-		fmt.Println()
-		return
+	return m, nil
+}
+
+// requireOrgOrError ensures an active organization is set on the session,
+// auto-selecting when the account has exactly one. On failure it sets m.err
+// (rendered in the menu) and returns false.
+func (m *appModel) requireOrgOrError() bool {
+	if _, err := m.session.RequireOrg(); err != nil {
+		m.err = err.Error()
+		return false
 	}
-	if len(orgs) == 1 {
-		o := orgs[0]
-		s.SetOrg(o.OrganizationID)
-		fmt.Printf("  Only one organization: %s\n\n", styleSuccess.Render(o.Name))
-		return
+	return true
+}
+
+func (m *appModel) backToMenu() (tea.Model, tea.Cmd) {
+	m.err = ""
+	m.step = stepMenu
+	m.rebuildMenu()
+	return m, nil
+}
+
+// --- login step -------------------------------------------------------------
+
+func (m *appModel) updateLogin(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if k, ok := msg.(tea.KeyMsg); ok {
+		switch k.String() {
+		case "esc":
+			return m.backToMenu()
+		case "enter":
+			email := strings.TrimSpace(m.loginModel.email.Value())
+			token := strings.TrimSpace(m.loginModel.token.Value())
+			if email == "" || token == "" {
+				m.loginModel.errText = "email and token are required"
+				return m, textinput.Blink
+			}
+			m.loginModel.errText = ""
+			m.step = stepVerifying
+			return m, verifyCredsCmd(email, token)
+		}
 	}
-	labels := make([]string, len(orgs))
-	cur := s.OrgID()
-	for i, o := range orgs {
+	var cmd tea.Cmd
+	m.loginModel, cmd = m.loginModel.update(msg)
+	return m, cmd
+}
+
+// --- card identifier prompt step -------------------------------------------
+
+func (m *appModel) updateCardPrompt(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if k, ok := msg.(tea.KeyMsg); ok {
+		switch k.String() {
+		case "esc":
+			return m.backToMenu()
+		case "enter":
+			identifier := strings.TrimSpace(m.cardPrompt.input.Value())
+			if identifier == "" {
+				return m.backToMenu()
+			}
+			m.step = stepLoading
+			m.loadingLabel = "Resolving card..."
+			return m, resolveCardCmd(m.session, identifier, m.session.BoardID())
+		}
+	}
+	var cmd tea.Cmd
+	m.cardPrompt, cmd = m.cardPrompt.update(msg)
+	return m, cmd
+}
+
+// --- switch-org step --------------------------------------------------------
+
+func (m *appModel) updateSwitchOrg(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch k.String() {
+	case "q", "esc":
+		return m.backToMenu()
+	case "up", "k":
+		if m.selectModel.cursor > 0 {
+			m.selectModel.cursor--
+		}
+	case "down", "j":
+		if m.selectModel.cursor < len(m.selectModel.options)-1 {
+			m.selectModel.cursor++
+		}
+	case "enter":
+		if m.selectModel.cursor >= 0 && m.selectModel.cursor < len(m.orgs) {
+			chosen := m.orgs[m.selectModel.cursor]
+			m.session.SetOrg(chosen.OrganizationID)
+			return m.backToMenu()
+		}
+		return m.backToMenu()
+	}
+	return m, nil
+}
+
+// --- boards steps -----------------------------------------------------------
+
+func (m *appModel) updatePickCollection(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch k.String() {
+	case "q", "esc":
+		return m.backToMenu()
+	case "up", "k":
+		if m.selectModel.cursor > 0 {
+			m.selectModel.cursor--
+		}
+	case "down", "j":
+		if m.selectModel.cursor < len(m.selectModel.options)-1 {
+			m.selectModel.cursor++
+		}
+	case "enter":
+		collectionID := resolveCollectionChoice(m.collections, m.selectModel.cursor)
+		m.step = stepLoading
+		m.loadingLabel = "Loading boards..."
+		return m, loadBoardsCmd(m.session, collectionID)
+	}
+	return m, nil
+}
+
+func (m *appModel) updatePickBoard(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch k.String() {
+	case "q", "esc":
+		// Up one level: back to the collection picker.
+		m.step = stepLoading
+		m.loadingLabel = "Loading collections..."
+		return m, loadCollectionsCmd(m.session)
+	case "up", "k":
+		if m.selectModel.cursor > 0 {
+			m.selectModel.cursor--
+		}
+	case "down", "j":
+		if m.selectModel.cursor < len(m.selectModel.options)-1 {
+			m.selectModel.cursor++
+		}
+	case "enter":
+		if m.selectModel.cursor >= 0 && m.selectModel.cursor < len(m.boards) {
+			chosen := m.boards[m.selectModel.cursor]
+			m.session.SetBoard(chosen.WidgetCommonID)
+			return m.backToMenu()
+		}
+		return m.backToMenu()
+	}
+	return m, nil
+}
+
+// --- cards step -------------------------------------------------------------
+
+func (m *appModel) updateCards(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch k.String() {
+	case "q", "esc":
+		return m.backToMenu()
+	case "up", "k":
+		if m.selectModel.cursor > 0 {
+			m.selectModel.cursor--
+		}
+	case "down", "j":
+		if m.selectModel.cursor < len(m.selectModel.options)-1 {
+			m.selectModel.cursor++
+		}
+	case "n":
+		if m.page < m.totalPages-1 {
+			m.page++
+			m.step = stepLoading
+			m.loadingLabel = "Loading cards..."
+			return m, loadCardsCmd(m.session, m.session.BoardID(), m.page)
+		}
+	case "p":
+		if m.page > 0 {
+			m.page--
+			m.step = stepLoading
+			m.loadingLabel = "Loading cards..."
+			return m, loadCardsCmd(m.session, m.session.BoardID(), m.page)
+		}
+	case "enter":
+		if m.selectModel.cursor >= 0 && m.selectModel.cursor < len(m.cards) {
+			c := m.cards[m.selectModel.cursor]
+			m.pendingCard = &c
+			m.step = stepLoading
+			m.loadingLabel = "Loading card detail..."
+			return m, loadCardDetailCmd(m.session, c)
+		}
+	}
+	return m, nil
+}
+
+// --- scroll step (card detail / users / tags / account) --------------------
+
+func (m *appModel) updateScroll(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch k.String() {
+	case "q", "esc":
+		// After viewing a card from the list, q returns to the list; from a
+		// top-level entry it returns to the menu. Distinguish by pendingCard.
+		if m.pendingCard != nil && m.session != nil && m.session.BoardID() != "" {
+			// Coming from list-cards detail view -> reload the cards page.
+			m.step = stepLoading
+			m.loadingLabel = "Loading cards..."
+			m.pendingCard = nil
+			return m, loadCardsCmd(m.session, m.session.BoardID(), m.page)
+		}
+		m.pendingCard = nil
+		return m.backToMenu()
+	}
+	newM, cmd := m.scroll.Update(k)
+	if sm, ok := newM.(scrollTextModel); ok {
+		m.scroll = sm
+	}
+	return m, cmd
+}
+
+// --- async result handlers --------------------------------------------------
+
+func (m *appModel) onOrgsLoaded(msg orgsLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = "Failed to load organizations: " + msg.err.Error()
+		return m.backToMenu()
+	}
+	m.orgs = msg.orgs
+	if len(m.orgs) == 0 {
+		m.err = "Your account has no organizations."
+		return m.backToMenu()
+	}
+	if len(m.orgs) == 1 {
+		m.session.SetOrg(m.orgs[0].OrganizationID)
+		m.err = ""
+		return m.backToMenu()
+	}
+	cur := m.session.OrgID()
+	labels := make([]string, len(m.orgs))
+	for i, o := range m.orgs {
 		label := o.Name
 		if o.OrganizationID == cur {
 			label += " " + styleSuccess.Render("(active)")
 		}
 		labels[i] = label
 	}
-	m := selectModel{
+	m.selectModel = selectModel{
 		title:   "Switch organization",
 		options: labels,
 		footer:  "up/down move . enter select . q cancel",
 	}
-	p := tea.NewProgram(m)
-	out, err := p.Run()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, styleError.Render("  Error: "+err.Error()))
-		fmt.Println()
-		return
-	}
-	r := out.(selectModel)
-	if r.cancel {
-		fmt.Println()
-		return
-	}
-	if r.cursor >= 0 && r.cursor < len(orgs) {
-		s.SetOrg(orgs[r.cursor].OrganizationID)
-		fmt.Printf("  Active organization: %s\n\n", styleSuccess.Render(orgs[r.cursor].Name))
-		return
-	}
-	fmt.Println()
+	m.step = stepSwitchOrg
+	return m, nil
 }
 
-// runLoginFlow prompts for email + token via the TUI, verifies them against
-// the live Favro API, and persists them only on success. Loops on failure
-// until cancelled.
-func runLoginFlow() {
-	fmt.Println()
-	prefill := ""
-	for {
-		p := tea.NewProgram(newLoginModel(prefill))
-		out, err := p.Run()
+func (m *appModel) onCollectionsLoaded(msg collectionsLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = "Failed to load collections: " + msg.err.Error()
+		return m.backToMenu()
+	}
+	m.collections = msg.collections
+	if len(m.collections) == 0 {
+		// Skip the picker; load boards with no collection filter.
+		m.step = stepLoading
+		m.loadingLabel = "Loading boards..."
+		return m, loadBoardsCmd(m.session, "")
+	}
+	m.selectModel = selectModel{
+		title:   "Browse boards",
+		options: collectionSelectOptions(m.collections),
+		footer:  "up/down move . enter select . q cancel",
+	}
+	m.step = stepBoardsPickCollection
+	return m, nil
+}
+
+func (m *appModel) onBoardsLoaded(msg boardsLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = "Failed to load boards: " + msg.err.Error()
+		return m.backToMenu()
+	}
+	m.boards = msg.boards
+	if len(m.boards) == 0 {
+		m.err = "No boards found."
+		return m.backToMenu()
+	}
+	m.selectModel = selectModel{
+		title:   "Browse boards  pick a board",
+		options: boardSelectOptions(m.boards),
+		footer:  "up/down move . enter select . q cancel",
+	}
+	m.step = stepBoardsPickBoard
+	return m, nil
+}
+
+func (m *appModel) onCardsLoaded(msg cardsLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = "Failed to load cards: " + msg.err.Error()
+		return m.backToMenu()
+	}
+	if len(msg.cards) == 0 {
+		m.err = "No cards on this board."
+		return m.backToMenu()
+	}
+	m.cards = msg.cards
+	m.totalPages = msg.total
+	title := fmt.Sprintf("List cards  page %d/%d", m.page+1, m.totalPages)
+	footer := "up/down move . enter detail . n next . p prev . q back"
+	if m.totalPages <= 1 {
+		footer = "up/down move . enter detail . q back"
+	}
+	m.selectModel = selectModel{
+		title:   title,
+		options: cardListOptions(m.cards),
+		footer:  footer,
+	}
+	m.step = stepCards
+	return m, nil
+}
+
+func (m *appModel) onUsersLoaded(msg usersLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = "Failed to load users: " + msg.err.Error()
+		return m.backToMenu()
+	}
+	if len(msg.users) == 0 {
+		m.err = "No users found."
+		return m.backToMenu()
+	}
+	m.scroll = newScrollTextModel(
+		fmt.Sprintf("Users  %d", len(msg.users)),
+		usersTableText(msg.users),
+	)
+	m.step = stepUsers
+	return m, nil
+}
+
+func (m *appModel) onTagsLoaded(msg tagsLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = "Failed to load tags: " + msg.err.Error()
+		return m.backToMenu()
+	}
+	if len(msg.tags) == 0 {
+		m.err = "No tags found."
+		return m.backToMenu()
+	}
+	m.scroll = newScrollTextModel(
+		fmt.Sprintf("Tags  %d", len(msg.tags)),
+		tagsTableText(msg.tags),
+	)
+	m.step = stepTags
+	return m, nil
+}
+
+func (m *appModel) onCardResolved(msg cardResolvedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = msg.err.Error()
+		// Back to the prompt for another attempt.
+		m.step = stepCardPrompt
+		return m, textinput.Blink
+	}
+	m.pendingCard = msg.card
+	m.step = stepLoading
+	m.loadingLabel = "Loading card detail..."
+	return m, loadCardDetailCmd(m.session, *msg.card)
+}
+
+func (m *appModel) onCardDetailLoaded(msg cardDetailLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = msg.err.Error()
+		if m.pendingCard == nil {
+			// Came from the prompt path.
+			m.step = stepCardPrompt
+			return m, textinput.Blink
+		}
+		return m.backToMenu()
+	}
+	m.scroll = newScrollTextModel(msg.title, msg.text)
+	m.step = stepCardDetail
+	return m, nil
+}
+
+func (m *appModel) onCredsVerified(msg credsVerifiedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.loginModel.errText = fmt.Sprintf("verification failed: %v", msg.err)
+		m.loginModel.token.SetValue("")
+		m.step = stepLogin
+		m.loginModel.email.Focus()
+		m.loginModel.token.Blur()
+		return m, textinput.Blink
+	}
+	email := strings.TrimSpace(m.loginModel.email.Value())
+	token := strings.TrimSpace(m.loginModel.token.Value())
+	if err := credentials.Save(email, token); err != nil {
+		m.err = "Failed to save credentials: " + err.Error()
+		return m.backToMenu()
+	}
+	m.session, _ = NewSession()
+	return m.backToMenu()
+}
+
+// ===========================================================================
+// View
+// ===========================================================================
+
+func (m *appModel) View() string {
+	switch m.step {
+	case stepMenu:
+		var b strings.Builder
+		b.WriteString(m.selectModel.View())
+		if m.err != "" {
+			b.WriteString("\n" + styleError.Render(m.err) + "\n")
+		}
+		return b.String()
+	case stepLoading:
+		var b strings.Builder
+		b.WriteString(styleTitle.Render("favro-mcp"))
+		b.WriteString("\n\n" + m.loadingLabel + "\n\n")
+		b.WriteString(styleFooter.Render("loading... (ctrl+c to cancel)"))
+		return b.String()
+	case stepVerifying:
+		return styleTitle.Render("Log in to Favro") + "\n\nVerifying credentials..."
+	case stepLogin:
+		return m.loginModel.View()
+	case stepCardPrompt:
+		return m.cardPrompt.View()
+	case stepSwitchOrg, stepBoardsPickCollection, stepBoardsPickBoard, stepCards:
+		return m.selectModel.View()
+	case stepCardDetail, stepUsers, stepTags, stepScroll:
+		return m.scroll.View()
+	}
+	return ""
+}
+
+// ===========================================================================
+// Menu definition
+// ===========================================================================
+
+// menuChoice identifies a menu entry's behavior. Replaces the old func()
+// actions so the model can transition between steps itself (no tea.Program
+// re-creation).
+type menuChoice int
+
+const (
+	menuQuit menuChoice = iota
+	menuLogin
+	menuConfigure
+	menuBrowseBoards
+	menuListCards
+	menuViewCardDetail
+	menuUsers
+	menuTags
+	menuSwitchOrg
+	menuLogout
+)
+
+// menuItem pairs a menu label with the choice that fires when it is selected.
+type menuItem struct {
+	label  string
+	choice menuChoice
+}
+
+// buildMenu returns the menu entries for the current login state.
+func buildMenu(loggedIn bool) []menuItem {
+	if !loggedIn {
+		return []menuItem{
+			{label: "Log in to Favro", choice: menuLogin},
+			{label: "Configure AI clients", choice: menuConfigure},
+			{label: "Quit", choice: menuQuit},
+		}
+	}
+	return []menuItem{
+		{label: "Browse boards", choice: menuBrowseBoards},
+		{label: "List cards", choice: menuListCards},
+		{label: "View card detail", choice: menuViewCardDetail},
+		{label: "Users", choice: menuUsers},
+		{label: "Tags", choice: menuTags},
+		{label: "Switch organization", choice: menuSwitchOrg},
+		{label: "Configure AI clients", choice: menuConfigure},
+		{label: "Log out", choice: menuLogout},
+		{label: "Quit", choice: menuQuit},
+	}
+}
+
+// buildAccountInfoText renders the active account / org block shown by the
+// "Log out" entry (which actually just displays the account).
+func buildAccountInfoText(s *Session) (string, string) {
+	var b strings.Builder
+	b.WriteString("Logged in as: " + s.email + "\n")
+	if id := s.OrgID(); id != "" {
+		b.WriteString("Active org:   " + id + "\n")
+	} else {
+		b.WriteString("Active org:   (none selected)\n")
+	}
+	b.WriteString("\nRun `favro-mcp login` to switch accounts.\n")
+	return b.String(), "favro-mcp  " + s.email
+}
+
+// ===========================================================================
+// Async tea.Cmds and their result messages
+// ===========================================================================
+
+// Each loader snapshots the session fields it needs before going off the
+// main loop, so the goroutine never races with the model mutating session
+// state on the main loop.
+
+type orgsLoadedMsg struct {
+	orgs []favro.Organization
+	err  error
+}
+
+func loadOrgsCmd(s *Session) tea.Cmd {
+	client := s.Client()
+	return func() tea.Msg {
+		orgs, err := client.GetOrganizations()
+		return orgsLoadedMsg{orgs: orgs, err: err}
+	}
+}
+
+type collectionsLoadedMsg struct {
+	collections []favro.Collection
+	err         error
+}
+
+func loadCollectionsCmd(s *Session) tea.Cmd {
+	client := s.Client()
+	return func() tea.Msg {
+		cols, err := client.GetCollections(false)
+		return collectionsLoadedMsg{collections: cols, err: err}
+	}
+}
+
+type boardsLoadedMsg struct {
+	boards []favro.Widget
+	err    error
+}
+
+func loadBoardsCmd(s *Session, collectionID string) tea.Cmd {
+	client := s.Client()
+	return func() tea.Msg {
+		boards, err := client.GetWidgets(collectionID, false)
+		return boardsLoadedMsg{boards: boards, err: err}
+	}
+}
+
+type cardsLoadedMsg struct {
+	cards []favro.Card
+	total int
+	err   error
+}
+
+func loadCardsCmd(s *Session, boardID string, page int) tea.Cmd {
+	client := s.Client()
+	filter := favro.CardFilter{WidgetCommonID: boardID, Unique: true}
+	return func() tea.Msg {
+		cards, total, err := client.GetCardsPage(filter, page)
+		return cardsLoadedMsg{cards: cards, total: total, err: err}
+	}
+}
+
+type usersLoadedMsg struct {
+	users []favro.User
+	err   error
+}
+
+func loadUsersCmd(s *Session) tea.Cmd {
+	client := s.Client()
+	return func() tea.Msg {
+		users, err := client.GetUsers()
+		return usersLoadedMsg{users: users, err: err}
+	}
+}
+
+type tagsLoadedMsg struct {
+	tags []favro.Tag
+	err  error
+}
+
+func loadTagsCmd(s *Session) tea.Cmd {
+	client := s.Client()
+	return func() tea.Msg {
+		tags, err := client.GetTags()
+		return tagsLoadedMsg{tags: tags, err: err}
+	}
+}
+
+type cardResolvedMsg struct {
+	card *favro.Card
+	err  error
+}
+
+func resolveCardCmd(s *Session, identifier, boardID string) tea.Cmd {
+	r := s.Resolver()
+	return func() tea.Msg {
+		c, err := r.Card(identifier, boardID)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, styleError.Render("  Error: "+err.Error()))
-			fmt.Println()
-			return
+			return cardResolvedMsg{err: err}
 		}
-		m := out.(loginModel)
-		if m.cancel {
-			fmt.Println()
-			return
+		return cardResolvedMsg{card: c}
+	}
+}
+
+type cardDetailLoadedMsg struct {
+	text  string
+	title string
+	err   error
+}
+
+func loadCardDetailCmd(s *Session, c favro.Card) tea.Cmd {
+	client := s.Client()
+	seq := c.SequentialID
+	return func() tea.Msg {
+		text, err := buildCardDetailText(client, c)
+		if err != nil {
+			return cardDetailLoadedMsg{err: err}
 		}
-		email := strings.TrimSpace(m.email.Value())
-		token := strings.TrimSpace(m.token.Value())
-		if email == "" || token == "" {
-			fmt.Println()
-			return
+		return cardDetailLoadedMsg{
+			text:  text,
+			title: fmt.Sprintf("Card detail  #%d", seq),
 		}
-		if _, err := favro.NewClient(email, token, "").GetOrganizations(); err != nil {
-			fmt.Printf("\n  %s\n  %s\n\n",
-				styleError.Render("Verification failed: "+err.Error()),
-				styleDim.Render("Please try again."))
-			prefill = email
-			continue
-		}
-		if err := credentials.Save(email, token); err != nil {
-			fmt.Fprintln(os.Stderr, styleError.Render("  Failed to save credentials: "+err.Error()))
-			fmt.Println()
-			return
-		}
-		fmt.Printf("  %s\n\n", styleSuccess.Render("Signed in as "+email))
-		return
+	}
+}
+
+type credsVerifiedMsg struct{ err error }
+
+func verifyCredsCmd(email, token string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := favro.NewClient(email, token, "").GetOrganizations()
+		return credsVerifiedMsg{err: err}
 	}
 }
 
 // ===========================================================================
-// TUI models (bubbletea inline mode - no alt-screen)
+// selectModel: a plain arrow-key single-choice list (no Init/Update of its
+// own; the appModel drives it directly).
 // ===========================================================================
 
-// selectModel is an arrow-key single-choice list rendered inline.
 type selectModel struct {
 	title   string
 	options []string
 	footer  string
 	cursor  int
-	cancel  bool
-}
-
-func (m selectModel) Init() tea.Cmd { return nil }
-
-func (m selectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	k, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
-	}
-	switch k.String() {
-	case "ctrl+c", "q", "esc":
-		m.cancel = true
-		return m, tea.Quit
-	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case "down", "j":
-		if m.cursor < len(m.options)-1 {
-			m.cursor++
-		}
-	case "enter":
-		return m, tea.Quit
-	}
-	return m, nil
 }
 
 func (m selectModel) View() string {
@@ -290,12 +964,16 @@ func (m selectModel) View() string {
 	return b.String()
 }
 
-// loginModel is the email + token form used by runLoginFlow.
+// ===========================================================================
+// loginModel: email + token form. Owned by appModel; appModel intercepts
+// submit/cancel and otherwise forwards messages here for typing + blink.
+// ===========================================================================
+
 type loginModel struct {
 	email   textinput.Model
 	token   textinput.Model
 	focused int // 0 = email, 1 = token
-	cancel  bool
+	errText string
 }
 
 func newLoginModel(prefill string) loginModel {
@@ -318,14 +996,11 @@ func newLoginModel(prefill string) loginModel {
 	return loginModel{email: e, token: t, focused: 0}
 }
 
-func (m loginModel) Init() tea.Cmd { return textinput.Blink }
-
-func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// update forwards a message to the focused textinput (for typing and the
+// cursor-blink animation) and handles Tab to switch focus.
+func (m loginModel) update(msg tea.Msg) (loginModel, tea.Cmd) {
 	if k, ok := msg.(tea.KeyMsg); ok {
 		switch k.String() {
-		case "ctrl+c", "esc":
-			m.cancel = true
-			return m, tea.Quit
 		case "tab", "shift+tab":
 			if m.focused == 0 {
 				m.focused = 1
@@ -337,8 +1012,6 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.email.Focus()
 			}
 			return m, textinput.Blink
-		case "enter":
-			return m, tea.Quit
 		}
 	}
 	var cmd tea.Cmd
@@ -353,9 +1026,12 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m loginModel) View() string {
 	var b strings.Builder
 	b.WriteString(styleTitle.Render("Log in to Favro"))
-	b.WriteString("\n\n")
+	b.WriteString("\n\nCredentials are verified then saved.\n\n")
 	b.WriteString(m.email.View() + "\n\n")
 	b.WriteString(m.token.View() + "\n\n")
+	if m.errText != "" {
+		b.WriteString(styleError.Render(m.errText) + "\n\n")
+	}
 	b.WriteString(styleFooter.Render("tab switch fields . enter submit . esc cancel"))
 	return b.String()
 }

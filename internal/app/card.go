@@ -2,79 +2,13 @@ package app
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/lh-etals/favro-mcp/internal/favro"
 )
-
-// runViewCardDetail is the "View card detail" menu entry. It prompts for a card
-// identifier (sequential ID like #123, card ID, or name) and shows the detail
-// screen.
-func runViewCardDetail() {
-	fmt.Println()
-	s, err := NewSession()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, styleError.Render("  Not logged in."))
-		fmt.Println()
-		return
-	}
-	if _, err := s.RequireOrg(); err != nil {
-		fmt.Fprintln(os.Stderr, styleError.Render("  "+err.Error()))
-		fmt.Println()
-		return
-	}
-	showCardDetail(s, nil)
-}
-
-// showCardDetail resolves and renders a single card. When preselected is nil
-// the user is prompted for a card identifier; otherwise the given card is
-// shown directly (used by the "List cards" screen's detail action).
-func showCardDetail(s *Session, preselected *favro.Card) {
-	card := preselected
-	if card == nil {
-		p := tea.NewProgram(newCardPromptModel())
-		out, err := p.Run()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, styleError.Render("  Error: "+err.Error()))
-			fmt.Println()
-			return
-		}
-		r := out.(cardPromptModel)
-		if r.cancel {
-			fmt.Println()
-			return
-		}
-		identifier := strings.TrimSpace(r.input.Value())
-		if identifier == "" {
-			fmt.Println()
-			return
-		}
-		c, err := s.Resolver().Card(identifier, s.BoardID())
-		if err != nil {
-			fmt.Fprintln(os.Stderr, styleError.Render("  "+err.Error()))
-			fmt.Println()
-			return
-		}
-		card = c
-	}
-
-	text, err := buildCardDetailText(s.Client(), *card)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, styleError.Render("  "+err.Error()))
-		fmt.Println()
-		return
-	}
-	title := fmt.Sprintf("Card detail  #%d", card.SequentialID)
-	p := tea.NewProgram(newScrollTextModel(title, text))
-	if _, err := p.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, styleError.Render("  Error: "+err.Error()))
-	}
-	fmt.Println()
-}
 
 // tlData pairs a tasklist with its tasks while building card detail.
 type tlData struct {
@@ -84,6 +18,8 @@ type tlData struct {
 
 // buildCardDetailText fetches the card's tasklists, comments, and resolves
 // board/column/lane/user names to produce the human-readable detail block.
+// Used by the interactive card-detail screen AND the one-shot `get-card`
+// command, so it stays a package-level helper.
 func buildCardDetailText(client *favro.Client, c favro.Card) (string, error) {
 	tasklists, err := client.GetTasklists(c.CardCommonID)
 	if err != nil {
@@ -253,11 +189,14 @@ func strOr(p *string) string {
 }
 
 // --- card identifier prompt -------------------------------------------------
-
+//
 // cardPromptModel is a single textinput used to ask for a card identifier.
+// It is a plain struct (not a tea.Model): appModel owns its lifecycle and
+// intercepts enter/esc itself, forwarding other messages here for typing and
+// the cursor-blink animation.
+
 type cardPromptModel struct {
-	input  textinput.Model
-	cancel bool
+	input textinput.Model
 }
 
 func newCardPromptModel() cardPromptModel {
@@ -269,18 +208,7 @@ func newCardPromptModel() cardPromptModel {
 	return cardPromptModel{input: ti}
 }
 
-func (m cardPromptModel) Init() tea.Cmd { return textinput.Blink }
-
-func (m cardPromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if k, ok := msg.(tea.KeyMsg); ok {
-		switch k.String() {
-		case "ctrl+c", "esc":
-			m.cancel = true
-			return m, tea.Quit
-		case "enter":
-			return m, tea.Quit
-		}
-	}
+func (m cardPromptModel) update(msg tea.Msg) (cardPromptModel, tea.Cmd) {
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	return m, cmd
