@@ -90,9 +90,9 @@ func buildMenu(loggedIn bool) []menuItem {
 	return []menuItem{
 		{label: "Browse boards", action: runBrowseBoards},
 		{label: "List cards", action: runListCards},
-		{label: "View card detail", action: comingSoon},
-		{label: "Users", action: comingSoon},
-		{label: "Tags", action: comingSoon},
+		{label: "View card detail", action: runViewCardDetail},
+		{label: "Users", action: runUsers},
+		{label: "Tags", action: runTags},
 		{label: "Switch organization", action: runSwitchOrg},
 		{label: "Configure AI clients", action: runConfigure},
 		{label: "Log out", action: showAccountInfo},
@@ -101,12 +101,6 @@ func buildMenu(loggedIn bool) []menuItem {
 }
 
 // --- actions ---------------------------------------------------------------
-
-func comingSoon() {
-	fmt.Println()
-	fmt.Println(styleDim.Render("  Coming soon."))
-	fmt.Println()
-}
 
 func runConfigure() {
 	fmt.Println()

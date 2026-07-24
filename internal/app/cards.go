@@ -88,7 +88,8 @@ func runListCards() {
 		case "detail":
 			if r.cursor >= 0 && r.cursor < len(cards) {
 				c := cards[r.cursor]
-				fmt.Printf("  Card: %s (#%d)\n", styleSuccess.Render(c.Name), c.SequentialID)
+				showCardDetail(s, &c)
+				continue
 			}
 			fmt.Println()
 			return
