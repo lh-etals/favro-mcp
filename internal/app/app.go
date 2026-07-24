@@ -1,7 +1,7 @@
 // Package app implements the interactive CLI app shell that a bare
 // `favro-mcp` invocation opens on a real terminal. The ENTIRE app runs as ONE
-// tea.Program (no alt-screen) so bubbletea's inline renderer redraws a single
-// evolving screen in place instead of appending a new block per step.
+// tea.Program in the alternate screen buffer so it owns the full terminal
+// window (like lazygit / gh-dash); a single viewport drives all scrolling.
 package app
 
 import (
@@ -11,7 +11,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/cellbuf"
 
 	"github.com/lh-etals/favro-mcp/internal/credentials"
 	"github.com/lh-etals/favro-mcp/internal/favro"
@@ -26,9 +28,11 @@ func isTerminal() bool {
 }
 
 // RunApp is the interactive CLI app. It builds a single appModel and runs it
-// in one tea.Program. When the user picks "Configure AI clients" the program
-// quits with reconfigure=true; RunApp then launches the installer (which has
-// its own TUI) and re-opens the app program afterwards.
+// in one tea.Program in the alternate screen buffer so the app owns the full
+// terminal window (like lazygit / gh-dash). When the user picks "Configure AI
+// clients" the program quits with reconfigure=true; RunApp then launches the
+// installer (which runs inline in the regular buffer) and re-opens the app
+// afterwards.
 func RunApp() {
 	if !isTerminal() {
 		fmt.Fprintln(os.Stderr, "favro-mcp: not a terminal. Run `favro-mcp mcp` to start the MCP server.")
@@ -36,7 +40,7 @@ func RunApp() {
 	}
 	m := newAppModel()
 	for {
-		p := tea.NewProgram(m)
+		p := tea.NewProgram(m, tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
 			fmt.Fprintln(os.Stderr, "  Error:", err)
 			return
@@ -83,7 +87,8 @@ const (
 
 // appModel owns every screen of the interactive app. All sub-models are
 // embedded fields so their state survives step transitions; the active one is
-// selected by `step` in Update/View.
+// selected by `step` in Update/View. A single viewport drives all scrollable
+// content (lists + detail text); it is resized by WindowSizeMsg.
 type appModel struct {
 	step         step
 	reconfigure  bool // set when user picked Configure; RunApp re-runs installer after exit
@@ -96,6 +101,15 @@ type appModel struct {
 	loginModel  loginModel      // email + token form
 	cardPrompt  cardPromptModel // single textinput for card identifier
 	scroll      scrollTextModel // card detail / users / tags / account info
+
+	// Full-window viewport (alt-screen). Width/Height are the terminal size;
+	// viewport.Height is sized to leave room for the header and footer chrome.
+	width    int
+	height   int
+	viewport viewport.Model
+	// lastSyncedStep tracks step transitions so the viewport scrolls back to
+	// the top whenever a new screen is entered.
+	lastSyncedStep step
 
 	// Data caches filled by tea.Cmds.
 	orgs        []favro.Organization
@@ -114,6 +128,8 @@ type appModel struct {
 func newAppModel() *appModel {
 	m := &appModel{step: stepMenu}
 	m.session, _ = NewSession() // nil if not logged in
+	m.viewport = viewport.New(80, 20)
+	m.viewport.MouseWheelEnabled = true
 	m.rebuildMenu()
 	return m
 }
@@ -129,7 +145,7 @@ func (m *appModel) rebuildMenu() {
 	m.selectModel = selectModel{
 		title:   title,
 		options: menuLabels(loggedIn),
-		footer:  "up/down move . enter select . q quit",
+		footer:  "up/down move . pgup/pgdn scroll . enter select . q quit",
 	}
 }
 
@@ -144,10 +160,37 @@ func menuLabels(loggedIn bool) []string {
 
 func (m *appModel) Init() tea.Cmd { return nil }
 
+// Update is the public tea.Model entry point. It dispatches to updateInner
+// for the real work, then re-syncs the shared viewport so the rendered body
+// always reflects the latest model state.
 func (m *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	nm, cmd := m.updateInner(msg)
+	if a, ok := nm.(*appModel); ok {
+		a.syncViewport()
+		return a, cmd
+	}
+	return nm, cmd
+}
+
+// updateInner is the step-aware dispatcher. Returns the new model (always a
+// *appModel in practice) plus a command.
+func (m *appModel) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Ctrl+c always quits immediately, regardless of step.
 	if k, ok := msg.(tea.KeyMsg); ok && k.String() == "ctrl+c" {
 		return m, tea.Quit
+	}
+
+	// WindowSizeMsg resizes the shared viewport (and is also forwarded to
+	// textinput sub-models by the per-step handlers below).
+	if ws, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = ws.Width
+		m.height = ws.Height
+		m.viewport.Width = ws.Width
+		vh := ws.Height - 4 // leave 4 lines for header + footer chrome
+		if vh < 3 {
+			vh = 3
+		}
+		m.viewport.Height = vh
 	}
 
 	// Async results land here regardless of step.
@@ -180,17 +223,6 @@ func (m *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateCardPrompt(msg)
 	}
 
-	// Scroll steps must forward WindowSizeMsg to the viewport.
-	if isScrollStep(m.step) {
-		if ws, ok := msg.(tea.WindowSizeMsg); ok {
-			newM, cmd := m.scroll.Update(ws)
-			if sm, ok2 := newM.(scrollTextModel); ok2 {
-				m.scroll = sm
-			}
-			return m, cmd
-		}
-	}
-
 	k, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return m, nil
@@ -216,9 +248,11 @@ func (m *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func isScrollStep(s step) bool {
+// isListStep reports whether the current step renders a selectModel whose
+// highlighted row (cursor) should auto-scroll into view.
+func isListStep(s step) bool {
 	switch s {
-	case stepCardDetail, stepUsers, stepTags, stepScroll:
+	case stepMenu, stepSwitchOrg, stepBoardsPickCollection, stepBoardsPickBoard, stepCards:
 		return true
 	}
 	return false
@@ -233,13 +267,11 @@ func (m *appModel) updateMenu(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "esc":
 		return m, tea.Quit
 	case "up", "k":
-		if m.selectModel.cursor > 0 {
-			m.selectModel.cursor--
-		}
+		m.moveCursor(-1)
 	case "down", "j":
-		if m.selectModel.cursor < len(m.selectModel.options)-1 {
-			m.selectModel.cursor++
-		}
+		m.moveCursor(1)
+	case "pgup", "pgdown", "g", "G":
+		m.handleViewportKey(k.String())
 	case "enter":
 		return m.chooseMenu()
 	}
@@ -390,13 +422,11 @@ func (m *appModel) updateSwitchOrg(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "esc":
 		return m.backToMenu()
 	case "up", "k":
-		if m.selectModel.cursor > 0 {
-			m.selectModel.cursor--
-		}
+		m.moveCursor(-1)
 	case "down", "j":
-		if m.selectModel.cursor < len(m.selectModel.options)-1 {
-			m.selectModel.cursor++
-		}
+		m.moveCursor(1)
+	case "pgup", "pgdown", "g", "G":
+		m.handleViewportKey(k.String())
 	case "enter":
 		if m.selectModel.cursor >= 0 && m.selectModel.cursor < len(m.orgs) {
 			chosen := m.orgs[m.selectModel.cursor]
@@ -415,13 +445,11 @@ func (m *appModel) updatePickCollection(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "esc":
 		return m.backToMenu()
 	case "up", "k":
-		if m.selectModel.cursor > 0 {
-			m.selectModel.cursor--
-		}
+		m.moveCursor(-1)
 	case "down", "j":
-		if m.selectModel.cursor < len(m.selectModel.options)-1 {
-			m.selectModel.cursor++
-		}
+		m.moveCursor(1)
+	case "pgup", "pgdown", "g", "G":
+		m.handleViewportKey(k.String())
 	case "enter":
 		collectionID := resolveCollectionChoice(m.collections, m.selectModel.cursor)
 		m.step = stepLoading
@@ -439,13 +467,11 @@ func (m *appModel) updatePickBoard(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.loadingLabel = "Loading collections..."
 		return m, loadCollectionsCmd(m.session)
 	case "up", "k":
-		if m.selectModel.cursor > 0 {
-			m.selectModel.cursor--
-		}
+		m.moveCursor(-1)
 	case "down", "j":
-		if m.selectModel.cursor < len(m.selectModel.options)-1 {
-			m.selectModel.cursor++
-		}
+		m.moveCursor(1)
+	case "pgup", "pgdown", "g", "G":
+		m.handleViewportKey(k.String())
 	case "enter":
 		if m.selectModel.cursor >= 0 && m.selectModel.cursor < len(m.boards) {
 			chosen := m.boards[m.selectModel.cursor]
@@ -464,13 +490,11 @@ func (m *appModel) updateCards(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "esc":
 		return m.backToMenu()
 	case "up", "k":
-		if m.selectModel.cursor > 0 {
-			m.selectModel.cursor--
-		}
+		m.moveCursor(-1)
 	case "down", "j":
-		if m.selectModel.cursor < len(m.selectModel.options)-1 {
-			m.selectModel.cursor++
-		}
+		m.moveCursor(1)
+	case "pgup", "pgdown", "g", "G":
+		m.handleViewportKey(k.String())
 	case "n":
 		if m.page < m.totalPages-1 {
 			m.page++
@@ -513,12 +537,28 @@ func (m *appModel) updateScroll(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.pendingCard = nil
 		return m.backToMenu()
+	case "up", "k", "down", "j", "pgup", "pgdown", "g", "G":
+		m.handleViewportKey(k.String())
 	}
-	newM, cmd := m.scroll.Update(k)
-	if sm, ok := newM.(scrollTextModel); ok {
-		m.scroll = sm
+	return m, nil
+}
+
+// handleViewportKey dispatches scroll-only keys to the shared viewport.
+func (m *appModel) handleViewportKey(key string) {
+	switch key {
+	case "up", "k":
+		m.viewport.LineUp(1)
+	case "down", "j":
+		m.viewport.LineDown(1)
+	case "pgup":
+		m.viewport.PageUp()
+	case "pgdown":
+		m.viewport.PageDown()
+	case "g":
+		m.viewport.GotoTop()
+	case "G":
+		m.viewport.GotoBottom()
 	}
-	return m, cmd
 }
 
 // --- async result handlers --------------------------------------------------
@@ -707,32 +747,185 @@ func (m *appModel) onCredsVerified(msg credsVerifiedMsg) (tea.Model, tea.Cmd) {
 // ===========================================================================
 
 func (m *appModel) View() string {
+	// Wait for the first WindowSizeMsg before painting so the viewport is
+	// sized correctly for the alt-screen.
+	if m.height == 0 {
+		return ""
+	}
+
+	var middle string
+	switch m.step {
+	case stepLogin:
+		// Forms render their own content (no viewport scrolling); still
+		// framed by the shared header/footer for a consistent chrome.
+		middle = m.loginModel.View()
+	case stepCardPrompt:
+		middle = m.cardPrompt.View()
+	default:
+		middle = m.viewport.View()
+	}
+
+	var b strings.Builder
+	b.WriteString(m.renderHeader())
+	b.WriteString("\n\n")
+	b.WriteString(middle)
+	b.WriteString("\n")
+	b.WriteString(m.renderFooter())
+	return b.String()
+}
+
+// renderHeader returns the single styled title line shown above the viewport.
+func (m *appModel) renderHeader() string {
+	return styleTitle.Render(m.headerText())
+}
+
+func (m *appModel) headerText() string {
+	const app = "Favro MCP"
+	screen := m.screenName()
+	if screen == "" {
+		return app
+	}
+	return app + "  " + screen
+}
+
+// screenName returns the per-step label appended to the app name in the header.
+func (m *appModel) screenName() string {
 	switch m.step {
 	case stepMenu:
-		var b strings.Builder
-		b.WriteString(m.selectModel.View())
-		if m.err != "" {
-			b.WriteString("\n" + styleError.Render(m.err) + "\n")
+		if m.session != nil {
+			return "Menu  " + m.session.email
 		}
-		return b.String()
+		return "Menu"
+	case stepSwitchOrg:
+		return "Switch organization"
+	case stepBoardsPickCollection:
+		return "Browse boards"
+	case stepBoardsPickBoard:
+		return "Pick a board"
+	case stepCards:
+		if m.totalPages > 0 {
+			return fmt.Sprintf("List cards  page %d/%d", m.page+1, m.totalPages)
+		}
+		return "List cards"
+	case stepCardDetail, stepUsers, stepTags, stepScroll:
+		return m.scroll.title
 	case stepLoading:
-		var b strings.Builder
-		b.WriteString(styleTitle.Render("favro-mcp"))
-		b.WriteString("\n\n" + m.loadingLabel + "\n\n")
-		b.WriteString(styleFooter.Render("loading... (ctrl+c to cancel)"))
-		return b.String()
+		return ""
 	case stepVerifying:
-		return styleTitle.Render("Log in to Favro") + "\n\nVerifying credentials..."
+		return "Log in"
 	case stepLogin:
-		return m.loginModel.View()
+		return "Log in"
 	case stepCardPrompt:
-		return m.cardPrompt.View()
+		return "View card detail"
+	}
+	return ""
+}
+
+// renderFooter returns the single styled key-hint line below the viewport.
+func (m *appModel) renderFooter() string {
+	return styleFooter.Render(m.footerText())
+}
+
+func (m *appModel) footerText() string {
+	switch m.step {
+	case stepMenu:
+		return m.selectModel.footer
+	case stepSwitchOrg, stepBoardsPickCollection, stepBoardsPickBoard:
+		return "up/down move . pgup/pgdn scroll . enter select . q cancel"
+	case stepCards:
+		if m.totalPages > 1 {
+			return "up/down move . pgup/pgdn scroll . enter detail . n next . p prev . q back"
+		}
+		return "up/down move . pgup/pgdn scroll . enter detail . q back"
+	case stepCardDetail, stepUsers, stepTags, stepScroll:
+		return "up/down scroll . pgup/pgdn . g top . G bottom . q back"
+	case stepLoading:
+		return "loading... (ctrl+c to cancel)"
+	case stepVerifying:
+		return ""
+	case stepLogin:
+		return "tab switch fields . enter submit . esc cancel"
+	case stepCardPrompt:
+		return "enter submit . esc cancel"
+	}
+	return ""
+}
+
+// bodyString returns the inner content the viewport (or form area) should show
+// for the current step. For list and scroll steps this is fed to the viewport.
+func (m *appModel) bodyString() string {
+	switch m.step {
+	case stepMenu:
+		body := m.selectModel.View()
+		if m.err != "" {
+			body += "\n" + styleError.Render(m.err) + "\n"
+		}
+		return body
 	case stepSwitchOrg, stepBoardsPickCollection, stepBoardsPickBoard, stepCards:
 		return m.selectModel.View()
 	case stepCardDetail, stepUsers, stepTags, stepScroll:
-		return m.scroll.View()
+		return m.scroll.content
+	case stepLoading:
+		return m.loadingLabel
+	case stepVerifying:
+		return "Verifying credentials..."
 	}
 	return ""
+}
+
+// syncViewport feeds the current screen body into the shared viewport.
+// Called by Update after every state change. When the step changes the
+// viewport is reset to the top so lists do not open scrolled to the bottom
+// of the previous screen. NOTE: this does not auto-follow the cursor; that
+// only happens in moveCursor so explicit pgup/pgdown scrolls are respected.
+func (m *appModel) syncViewport() {
+	if m.height == 0 {
+		return
+	}
+	body := m.bodyString()
+	// Wrap long lines (e.g. card detail paragraphs) to the viewport width so
+	// nothing is clipped at the right edge.
+	m.viewport.SetContent(cellbuf.Wrap(body, m.viewport.Width, ""))
+	if m.lastSyncedStep != m.step {
+		m.viewport.GotoTop()
+		m.lastSyncedStep = m.step
+	}
+}
+
+// moveCursor adjusts the selectModel cursor by delta (clamped to the option
+// range) and scrolls the viewport so the highlighted row stays visible. Used
+// by all list steps for up/down/j/k keys.
+func (m *appModel) moveCursor(delta int) {
+	n := len(m.selectModel.options)
+	if n == 0 {
+		return
+	}
+	m.selectModel.cursor += delta
+	if m.selectModel.cursor < 0 {
+		m.selectModel.cursor = 0
+	}
+	if m.selectModel.cursor > n-1 {
+		m.selectModel.cursor = n - 1
+	}
+	m.followCursor()
+}
+
+// followCursor scrolls the viewport to keep the highlighted list row on
+// screen. Each selectModel option currently occupies exactly one rendered
+// line, so cursor N maps to viewport line N.
+func (m *appModel) followCursor() {
+	if !isListStep(m.step) {
+		return
+	}
+	cursor := m.selectModel.cursor
+	top := m.viewport.YOffset
+	bottom := m.viewport.YOffset + m.viewport.Height - 1
+	switch {
+	case cursor < top:
+		m.viewport.SetYOffset(cursor)
+	case cursor > bottom:
+		m.viewport.SetYOffset(cursor - m.viewport.Height + 1)
+	}
 }
 
 // ===========================================================================
@@ -945,10 +1138,14 @@ type selectModel struct {
 	cursor  int
 }
 
+// View renders the option lines only (no title/footer chrome; those live on
+// appModel so they can frame the viewport). Each option is exactly one line
+// so the appModel can map cursor N to viewport line N for auto-scrolling.
 func (m selectModel) View() string {
+	if len(m.options) == 0 {
+		return ""
+	}
 	var b strings.Builder
-	b.WriteString(styleTitle.Render(m.title))
-	b.WriteString("\n\n")
 	for i, o := range m.options {
 		cursor := " "
 		if i == m.cursor {
@@ -958,9 +1155,8 @@ func (m selectModel) View() string {
 		if i == m.cursor {
 			dot = styleSuccess.Render("●")
 		}
-		b.WriteString(fmt.Sprintf(" %s %s %s\n", cursor, dot, o))
+		fmt.Fprintf(&b, " %s %s %s\n", cursor, dot, o)
 	}
-	b.WriteString("\n" + styleFooter.Render(m.footer))
 	return b.String()
 }
 
