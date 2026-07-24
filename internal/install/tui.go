@@ -1,7 +1,6 @@
 package install
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -711,138 +710,8 @@ func runForm(m *installModel) error {
 }
 
 // ===========================================================================
-// Standalone login model (used by RunApp's "Log in to Favro" menu entry; the
-// installer flow uses installModel's stepLogin instead).
+// Multi-select (RunUninstall)
 // ===========================================================================
-
-type loginModel struct {
-	email   textinput.Model
-	token   textinput.Model
-	focused int // 0 = email, 1 = token
-	cancel  bool
-}
-
-func newLoginModel(prefill string) loginModel {
-	e := textinput.New()
-	e.Prompt = "  Email:  "
-	e.Placeholder = "you@example.com"
-	e.CharLimit = 200
-	if prefill != "" {
-		e.SetValue(prefill)
-	}
-	e.Focus()
-
-	t := textinput.New()
-	t.Prompt = "  Token:  "
-	t.Placeholder = "Favro API token"
-	t.EchoMode = textinput.EchoPassword
-	t.EchoCharacter = '*'
-	t.CharLimit = 400
-
-	return loginModel{email: e, token: t, focused: 0}
-}
-
-func (m loginModel) Init() tea.Cmd { return textinput.Blink }
-
-func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if k, ok := msg.(tea.KeyMsg); ok {
-		switch k.String() {
-		case "ctrl+c", "esc":
-			m.cancel = true
-			return m, tea.Quit
-		case "tab", "shift+tab":
-			if m.focused == 0 {
-				m.focused = 1
-				m.email.Blur()
-				m.token.Focus()
-			} else {
-				m.focused = 0
-				m.token.Blur()
-				m.email.Focus()
-			}
-			return m, textinput.Blink
-		case "enter":
-			return m, tea.Quit
-		}
-	}
-	var cmd tea.Cmd
-	if m.focused == 0 {
-		m.email, cmd = m.email.Update(msg)
-	} else {
-		m.token, cmd = m.token.Update(msg)
-	}
-	return m, cmd
-}
-
-func (m loginModel) View() string {
-	var b strings.Builder
-	b.WriteString(styleTitle.Render("Log in to Favro"))
-	b.WriteString("\n\n")
-	b.WriteString(m.email.View() + "\n\n")
-	b.WriteString(m.token.View() + "\n\n")
-	b.WriteString(styleFooter.Render("tab switch fields . enter submit . esc cancel"))
-	return b.String()
-}
-
-// ===========================================================================
-// Generic single-select (RunApp menu) and multi-select (RunUninstall)
-// ===========================================================================
-
-// selectModel is an arrow-key single-choice list. It renders in place via
-// bubbletea's inline (no-alt-screen) renderer.
-type selectModel struct {
-	title   string
-	options []string
-	hint    string
-	footer  string
-	cursor  int
-	cancel  bool
-}
-
-func (m selectModel) Init() tea.Cmd { return nil }
-
-func (m selectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	k, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
-	}
-	switch k.String() {
-	case "ctrl+c", "q", "esc":
-		m.cancel = true
-		return m, tea.Quit
-	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case "down", "j":
-		if m.cursor < len(m.options)-1 {
-			m.cursor++
-		}
-	case "enter":
-		return m, tea.Quit
-	}
-	return m, nil
-}
-
-func (m selectModel) View() string {
-	var b strings.Builder
-	b.WriteString(styleTitle.Render(m.title))
-	b.WriteString("\n\n")
-	for i, o := range m.options {
-		cursor := " "
-		if i == m.cursor {
-			cursor = styleCursor.Render(">")
-		}
-		dot := " "
-		label := o
-		if i == m.cursor {
-			dot = styleOn.Render("●")
-		}
-		b.WriteString(fmt.Sprintf(" %s %s %s\n", cursor, dot, label))
-	}
-	b.WriteString("\n" + styleFooter.Render(m.footer))
-	return b.String()
-}
 
 // multiRow is one toggleable line in a multiModel.
 type multiRow struct {
@@ -937,40 +806,4 @@ func runMultiSelect(title string, rows []multiRow) ([]multiRow, error) {
 		return nil, ErrCancelled
 	}
 	return r.rows, nil
-}
-
-// ===========================================================================
-// RunApp - top-level menu for bare `favro-mcp`
-// ===========================================================================
-
-// RunApp is the interactive CLI app launched by bare `favro-mcp` on a real
-// terminal. It shows an arrow-key menu and loops until the user quits.
-func RunApp() {
-	for {
-		m := selectModel{
-			title:   "favro-mcp",
-			options: []string{"Configure AI clients", "Log in to Favro", "Quit"},
-			footer:  "up/down move . enter select . q quit",
-		}
-		p := tea.NewProgram(m)
-		out, err := p.Run()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "  Error:", err)
-			return
-		}
-		r := out.(selectModel)
-		if r.cancel || r.cursor == 2 {
-			return
-		}
-		switch r.cursor {
-		case 0:
-			if err := RunInstall(Options{}); err != nil && !errors.Is(err, ErrCancelled) {
-				fmt.Fprintln(os.Stderr, "  Error:", err)
-			}
-		case 1:
-			if err := interactiveLogin(""); err != nil && !errors.Is(err, ErrCancelled) {
-				fmt.Fprintln(os.Stderr, "  Error:", err)
-			}
-		}
-	}
 }

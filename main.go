@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/lh-etals/favro-mcp/internal/app"
 	"github.com/lh-etals/favro-mcp/internal/credentials"
 	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/lh-etals/favro-mcp/internal/install"
@@ -34,13 +35,20 @@ func main() {
 			runInstaller(true, os.Args[2:])
 			return
 		}
+		// One-shot CLI commands (list-boards, get-card, ...) run before the
+		// bare-invocation fallthrough. They are distinct from both the
+		// interactive app (bare invocation on a TTY) and the MCP server.
+		if app.IsOneShot(os.Args[1]) {
+			app.RunOneShot(os.Args[1], os.Args[2:])
+			return
+		}
 	}
 
 	// Bare invocation: interactive app on a real terminal; otherwise (pipe,
 	// MCP client, cron, ...) run the MCP server for backwards compatibility
 	// with v0.8.0 client configs that spawn `favro-mcp` with no subcommand.
 	if isTerminal() {
-		install.RunApp()
+		app.RunApp()
 		return
 	}
 	runMCPServer()

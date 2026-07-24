@@ -75,8 +75,8 @@ func TestClassifyError(t *testing.T) {
 		{&favro.AuthError{APIError: &favro.APIError{Status: 403}}, "forbidden"},
 		{&favro.RateLimitError{APIError: &favro.APIError{Status: 429}}, "rate_limited"},
 		{&favro.APIError{Status: 500}, "api_error"},
-		{&notFoundError{entityType: "card", identifier: "x"}, "not_found"},
-		{&ambiguousError{entityType: "card", name: "x"}, "ambiguous"},
+		{newNotFoundError("card", "x"), "not_found"},
+		{newAmbiguousError("card", "x", nil), "ambiguous"},
 	}
 	for _, c := range cases {
 		kind, _ := classifyError(c.err)
