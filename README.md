@@ -8,7 +8,13 @@ Give any AI agent full control of your [Favro](https://favro.com) boards, cards,
 columns, tags, and tasks through **32 MCP tools** - with a universal one-command
 installer, built-in client detection, and tiered toolset control.
 
-macOS / Linux:
+macOS:
+
+```bash
+curl -fsSL https://github.com/lh-etals/favro-mcp/raw/main/install.sh | sh
+```
+
+Linux:
 
 ```bash
 curl -fsSL https://github.com/lh-etals/favro-mcp/raw/main/install.sh | sh
