@@ -1,7 +1,6 @@
 package install
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -489,7 +488,7 @@ func (m loginModel) View() string {
 // runLoginTUI collects email + token (token hidden). Returns empty ok=false if cancelled.
 func runLoginTUI(prefillEmail string) (email, token string, ok bool, err error) {
 	if !isTTY() {
-		r := bufio.NewReader(os.Stdin)
+		r := sharedStdinReader()
 		fmt.Print("Favro email: ")
 		e, err := r.ReadString('\n')
 		if err != nil {
@@ -533,7 +532,7 @@ func truncate(s string, n int) string {
 }
 
 func readLine() string {
-	r := bufio.NewReader(os.Stdin)
+	r := sharedStdinReader()
 	line, _ := r.ReadString('\n')
 	return line
 }

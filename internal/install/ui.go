@@ -10,6 +10,15 @@ import (
 )
 
 // choice represents one selectable client row.
+var sharedReader *bufio.Reader
+
+func sharedStdinReader() *bufio.Reader {
+	if sharedReader == nil {
+		sharedReader = bufio.NewReader(os.Stdin)
+	}
+	return sharedReader
+}
+
 type choice struct {
 	id      string
 	label   string
@@ -28,7 +37,7 @@ func selectOne(prompt string, options []string, defaultIdx int) int {
 		fmt.Printf("  %d. %s%s\n", i+1, o, mark)
 	}
 	fmt.Printf("Choose [1-%d]: ", len(options))
-	r := bufio.NewReader(os.Stdin)
+	r := sharedStdinReader()
 	line, _ := r.ReadString('\n')
 	line = strings.TrimSpace(line)
 	if line == "" {
@@ -124,7 +133,7 @@ func fallbackSelect(prompt string, choices []choice) []string {
 		fmt.Printf("  %s %2d. %s\n", mark, i+1, c.label)
 	}
 	fmt.Print("Enter comma-separated numbers (blank = keep * rows): ")
-	r := bufio.NewReader(os.Stdin)
+	r := sharedStdinReader()
 	line, _ := r.ReadString('\n')
 	if strings.TrimSpace(line) == "" {
 		var out []string

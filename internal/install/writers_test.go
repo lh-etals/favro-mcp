@@ -179,6 +179,21 @@ func TestTomlDottedNameNoDuplication(t *testing.T) {
 	}
 }
 
+// TOML: BOM-prefixed file is handled, not treated as unparseable.
+func TestTomlHandlesBOM(t *testing.T) {
+	dir := t.TempDir()
+	orig := "\xEF\xBB\xBF[mcp_servers.preexisting]\ncommand = \"old\"\n"
+	f := writeFile(t, dir, "config.toml", orig)
+	e := target("a@b.com", "tok")
+	if r, err := upsertTomlServer(f, "favro", e, false); err != nil || r != writeOK {
+		t.Fatalf("upsert=%v err=%v want ok", r, err)
+	}
+	got := read(t, f)
+	if !strings.Contains(got, "favro") || !strings.Contains(got, "preexisting") {
+		t.Errorf("BOM TOML not handled correctly:\n%s", got)
+	}
+}
+
 // YAML: upsert + remove on the Continue list format.
 func TestYamlListUpsertRemove(t *testing.T) {
 	dir := t.TempDir()

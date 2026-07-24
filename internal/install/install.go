@@ -374,7 +374,9 @@ func applyRemove(c ClientDef, name string, dryRun bool) ApplyResult {
 		cmd.Stderr = &rerr
 		if err := cmd.Run(); err != nil {
 			detail := firstLine(err.Error())
-			if se := strings.TrimSpace(rerr.String()); se != "" { detail = firstLine(se) }
+			if se := strings.TrimSpace(rerr.String()); se != "" {
+				detail = firstLine(se)
+			}
 			return ApplyResult{Status: "failed", Detail: detail}
 		}
 		return ApplyResult{Status: "ok"}

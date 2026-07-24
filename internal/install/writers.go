@@ -276,7 +276,6 @@ func upsertTomlServer(file, name string, e ServerTarget, dryRun bool) (WriteResu
 		if !os.IsNotExist(readErr) {
 			return "", readErr
 		}
-		raw = bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF})
 		if dryRun {
 			return writeOK, nil
 		}
@@ -286,6 +285,8 @@ func upsertTomlServer(file, name string, e ServerTarget, dryRun bool) (WriteResu
 		}
 		return writeOK, writeToml(file, doc)
 	}
+	// Strip a UTF-8 BOM (some Windows editors add one; go-toml rejects it).
+	raw = bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF})
 
 	obj := entryObject(e)
 	doc := map[string]any{}
@@ -323,6 +324,7 @@ func removeTomlServer(file, name string, dryRun bool) (WriteResult, error) {
 		}
 		return "", readErr
 	}
+	raw = bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF})
 	doc := map[string]any{}
 	if strings.TrimSpace(string(raw)) != "" {
 		if err := toml.Unmarshal(raw, &doc); err != nil {
