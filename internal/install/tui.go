@@ -199,6 +199,9 @@ func promptTools(catalog []mcpserver.ToolInfo) ([]string, error) {
 // promptLogin reads the Favro email (echoed) and API token (hidden on a TTY via
 // term.ReadPassword). An empty email or token returns ErrCancelled.
 func promptLogin(prefillEmail string) (email, token string, err error) {
+	if !isTTY() {
+		return "", "", ErrCancelled
+	}
 	fmt.Printf("\n  Log in to Favro\n\n")
 	fmt.Printf("  Email: ")
 	email = readLine()

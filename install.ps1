@@ -76,6 +76,7 @@ try {
   Write-Host ""
   Write-Host "  Download failed: $_" -ForegroundColor Red
   Write-Host "  URL: $Url" -ForegroundColor Red
+  Remove-Item $Target -ErrorAction SilentlyContinue
   return
 } finally {
   if ($fs -ne $null) { $fs.Close() }
