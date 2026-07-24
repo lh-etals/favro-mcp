@@ -2,10 +2,12 @@ package install
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lh-etals/favro-mcp/internal/credentials"
@@ -14,6 +16,10 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )
+
+// execTimeout caps how long an installer/remover subprocess (claude, code, ...)
+// may run before being killed, so a hung client can't freeze the whole TUI.
+const execTimeout = 10 * time.Second
 
 // Options controls install/uninstall behaviour.
 type Options struct {
@@ -98,7 +104,9 @@ func applyClient(c ClientDef, name string, e ServerTarget, dryRun bool) ApplyRes
 		if dryRun {
 			return ApplyResult{Status: "ok", Detail: "would run: " + bin + " " + strings.Join(args, " ")}
 		}
-		cmd := exec.Command(bin, args...)
+		ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, bin, args...)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err != nil {
@@ -481,7 +489,9 @@ func applyRemove(c ClientDef, name string, dryRun bool) ApplyResult {
 		if dryRun {
 			return ApplyResult{Status: "ok", Detail: "would run: " + bin + " " + strings.Join(args, " ")}
 		}
-		cmd := exec.Command(bin, args...)
+		ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, bin, args...)
 		var rerr bytes.Buffer
 		cmd.Stderr = &rerr
 		if err := cmd.Run(); err != nil {

@@ -13,7 +13,7 @@ import (
 )
 
 // Version is the server version (overridable via -ldflags at build time).
-var Version = "0.9.0"
+var Version = "0.9.3"
 
 // Toolset tiers. They are cumulative: read ⊂ write ⊂ delete.
 const (

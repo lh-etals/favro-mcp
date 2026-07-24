@@ -11,6 +11,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
 
+	"github.com/lh-etals/favro-mcp/internal/credentials"
+	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/lh-etals/favro-mcp/internal/mcpserver"
 )
 
@@ -49,9 +51,9 @@ func indexOf(s []int, v int) int {
 
 // ===========================================================================
 // Unified installer model: the WHOLE interactive flow (toolset -> clients ->
-// custom tools -> login -> applying -> done) runs as ONE tea.Program, so
-// bubbletea's inline renderer redraws a single screen in place instead of
-// appending a new block per step.
+// custom tools -> login -> verifying -> configuring -> done) runs as ONE
+// tea.Program, so bubbletea's inline renderer redraws a single screen in place
+// instead of appending a new block per step.
 // ===========================================================================
 
 type step int
@@ -59,9 +61,10 @@ type step int
 const (
 	stepToolset step = iota
 	stepClients
-	stepCustomTools // only if Custom chosen
-	stepLogin       // only if creds missing
-	stepApplying
+	stepCustomTools  // only if Custom chosen
+	stepLogin        // only if creds missing
+	stepVerifying    // network check while submitting login
+	stepConfiguring  // file I/O + exec while applying changes
 	stepDone
 )
 
@@ -226,6 +229,30 @@ func (m *installModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cancel = true
 		return m, tea.Quit
 	}
+	// Async results from verifyCredsCmd / startApply land here:
+	switch msg := msg.(type) {
+	case credsVerifiedMsg:
+		if msg.err != nil {
+			m.loginError = fmt.Sprintf("verification failed: %v", msg.err)
+			m.tokenTI.SetValue("")
+			m.step = stepLogin
+			m.emailTI.Focus()
+			return m, textinput.Blink
+		}
+		if err := credentials.Save(m.email, m.token); err != nil {
+			m.applyError = fmt.Sprintf("failed to save credentials: %v", err)
+			m.step = stepDone
+			return m, nil
+		}
+		m.needLogin = false
+		m.step = stepConfiguring
+		return m, m.startApply()
+	case applyDoneMsg:
+		m.applyResults = msg.results
+		m.applyError = msg.err
+		m.step = stepDone
+		return m, nil
+	}
 	// The login step must also handle non-key messages (cursor blink).
 	if m.step == stepLogin {
 		return m.updateLogin(msg)
@@ -246,8 +273,6 @@ func (m *installModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", "q", "esc":
 			return m, tea.Quit
 		}
-	case stepApplying:
-		// transient: apply() runs synchronously and advances to stepDone
 	}
 	return m, nil
 }
@@ -348,9 +373,9 @@ func (m *installModel) updateLogin(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// submitLogin verifies the entered credentials against the Favro API and, on
-// success, saves them and advances to applying. On failure it clears the token
-// and re-prompts in place.
+// submitLogin captures the entered credentials and kicks off an async
+// verification against the Favro API. The UI flips to stepVerifying while the
+// network call runs; the result is handled in Update via credsVerifiedMsg.
 func (m *installModel) submitLogin() tea.Cmd {
 	email := strings.TrimSpace(m.emailTI.Value())
 	token := strings.TrimSpace(m.tokenTI.Value())
@@ -358,19 +383,15 @@ func (m *installModel) submitLogin() tea.Cmd {
 		m.loginError = "email and token are required"
 		return nil
 	}
-	if err := verifyAndSaveCreds(email, token); err != nil {
-		m.loginError = fmt.Sprintf("verification failed: %v", err)
-		m.tokenTI.SetValue("")
-		return nil
-	}
-	m.needLogin = false
-	m.step = stepApplying
-	m.apply()
-	return nil
+	m.email = email
+	m.token = token
+	m.loginError = ""
+	m.step = stepVerifying
+	return verifyCredsCmd(email, token)
 }
 
 // toLoginOrApply advances from clients/custom-tools to the login step (if creds
-// are still missing) or straight to applying.
+// are still missing) or straight to the async apply pipeline.
 func (m *installModel) toLoginOrApply() tea.Cmd {
 	if m.needLogin {
 		m.step = stepLogin
@@ -380,9 +401,8 @@ func (m *installModel) toLoginOrApply() tea.Cmd {
 		m.tokenTI.Blur()
 		return textinput.Blink
 	}
-	m.step = stepApplying
-	m.apply()
-	return nil
+	m.step = stepConfiguring
+	return m.startApply()
 }
 
 func (m *installModel) moveClient(dir int) {
@@ -447,10 +467,30 @@ func (m *installModel) computeEnv() map[string]string {
 	return env
 }
 
-// apply runs every selected client's install (and unregisters deselected
-// previously-registered clients) synchronously. File writes are fast, so
-// blocking here is fine; the redraw then lands directly on the done screen.
-func (m *installModel) apply() {
+// credsVerifiedMsg is returned by verifyCredsCmd with the verification outcome.
+type credsVerifiedMsg struct{ err error }
+
+// verifyCredsCmd checks the given credentials against the live Favro API and
+// reports success/failure via credsVerifiedMsg. Runs off the main loop so the
+// UI can show a "Verifying..." state instead of freezing.
+func verifyCredsCmd(email, token string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := favro.NewClient(email, token, "").GetOrganizations()
+		return credsVerifiedMsg{err: err}
+	}
+}
+
+// applyDoneMsg carries the results (or fatal error) of an apply run.
+type applyDoneMsg struct {
+	results []applyResult
+	err     string
+}
+
+// startApply returns a tea.Cmd that runs every selected client's install (and
+// unregisters deselected previously-registered clients) off the main loop and
+// reports results via applyDoneMsg. Inputs are snapshotted into locals so the
+// goroutine never races with the model's state.
+func (m *installModel) startApply() tea.Cmd {
 	chosenSet := map[string]bool{}
 	for _, r := range m.clientRows {
 		if r.detected && r.checked {
@@ -461,27 +501,31 @@ func (m *installModel) apply() {
 	for _, c := range m.detected {
 		detectedSet[c.ID] = true
 	}
-	target, err := serverTarget(m.computeEnv())
-	if err != nil {
-		m.applyError = err.Error()
-		m.step = stepDone
-		return
-	}
-	m.applyResults = m.applyResults[:0]
-	for _, c := range Clients {
-		if !detectedSet[c.ID] {
-			continue
+	env := m.computeEnv()
+	name := m.name
+	dryRun := m.opts.DryRun
+	wasRegistered := m.wasRegistered
+	return func() tea.Msg {
+		target, err := serverTarget(env)
+		if err != nil {
+			return applyDoneMsg{err: err.Error()}
 		}
-		switch {
-		case chosenSet[c.ID]:
-			r := applyClient(c, m.name, target, m.opts.DryRun)
-			m.applyResults = append(m.applyResults, applyResult{client: c, res: r, action: "install"})
-		case m.wasRegistered[c.ID]:
-			r := applyRemove(c, m.name, m.opts.DryRun)
-			m.applyResults = append(m.applyResults, applyResult{client: c, res: r, action: "remove"})
+		var results []applyResult
+		for _, c := range Clients {
+			if !detectedSet[c.ID] {
+				continue
+			}
+			switch {
+			case chosenSet[c.ID]:
+				r := applyClient(c, name, target, dryRun)
+				results = append(results, applyResult{client: c, res: r, action: "install"})
+			case wasRegistered[c.ID]:
+				r := applyRemove(c, name, dryRun)
+				results = append(results, applyResult{client: c, res: r, action: "remove"})
+			}
 		}
+		return applyDoneMsg{results: results}
 	}
-	m.step = stepDone
 }
 
 func (m installModel) resultLine(r applyResult) string {
@@ -509,8 +553,10 @@ func (m *installModel) View() string {
 		return m.viewTools()
 	case stepLogin:
 		return m.viewLogin()
-	case stepApplying:
-		return styleTitle.Render("favro-mcp installer") + "\n\nApplying changes..."
+	case stepVerifying:
+		return styleTitle.Render("favro-mcp installer") + "\n\nVerifying credentials..."
+	case stepConfiguring:
+		return styleTitle.Render("favro-mcp installer") + "\n\nConfiguring clients..."
 	case stepDone:
 		return m.viewDone()
 	}
