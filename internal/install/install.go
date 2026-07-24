@@ -11,6 +11,8 @@ import (
 	"github.com/lh-etals/favro-mcp/internal/credentials"
 	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/lh-etals/favro-mcp/internal/mcpserver"
+	"github.com/pelletier/go-toml/v2"
+	"gopkg.in/yaml.v3"
 )
 
 // Options controls install/uninstall behaviour.
@@ -118,6 +120,76 @@ func firstLine(s string) string {
 	return s
 }
 
+// isCurrentlyRegistered reports whether `name` is already present in this
+// client's config (or, for command-style clients where we can't tell, assumes
+// it is so the installer never skips a legitimate removal). Used to diff the
+// user's new selection against the prior state and unregister deselected
+// clients.
+func isCurrentlyRegistered(c ClientDef, serverName string) bool {
+	inst := c.Install
+	switch inst.Kind {
+	case "file-json":
+		file := inst.path()
+		if file == "" {
+			return false
+		}
+		_, data, err := readJSONTolerant(file)
+		if err != nil || data == nil {
+			return false
+		}
+		servers, _ := data[inst.TopKey].(map[string]any)
+		_, exists := servers[serverName]
+		return exists
+	case "file-toml":
+		file := inst.path()
+		if file == "" {
+			return false
+		}
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			return false
+		}
+		raw = bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF})
+		if strings.TrimSpace(string(raw)) == "" {
+			return false
+		}
+		doc := map[string]any{}
+		if err := toml.Unmarshal(raw, &doc); err != nil {
+			return false
+		}
+		servers, _ := doc["mcp_servers"].(map[string]any)
+		_, exists := servers[serverName]
+		return exists
+	case "file-yaml-list":
+		file := inst.path()
+		if file == "" {
+			return false
+		}
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			return false
+		}
+		rootMap := map[string]any{}
+		if err := yaml.Unmarshal(raw, &rootMap); err != nil {
+			return false
+		}
+		list, _ := rootMap["mcpServers"].([]any)
+		for _, it := range list {
+			if m, ok := it.(map[string]any); ok {
+				if n, _ := m["name"].(string); n == serverName {
+					return true
+				}
+			}
+		}
+		return false
+	case "command":
+		// Can't easily inspect external CLI state; assume registered so a
+		// deselected detected client still gets a removal attempt.
+		return true
+	}
+	return false
+}
+
 func describe(r ApplyResult) string {
 	switch r.Status {
 	case "ok":
@@ -191,6 +263,16 @@ func RunInstall(opts Options) error {
 		}
 	}
 
+	// Snapshot each detected client's current registration state BEFORE the
+	// prompt so we can diff it against the user's new selection afterwards:
+	// deselected clients that were previously registered get unregistered.
+	wasRegistered := map[string]bool{}
+	for _, c := range detected {
+		if isCurrentlyRegistered(c, name) {
+			wasRegistered[c.ID] = true
+		}
+	}
+
 	fmt.Printf("favro-mcp installer - registering server %q\n", name)
 	fmt.Printf("  command: %s\n\n", target.Command)
 
@@ -231,7 +313,26 @@ func RunInstall(opts Options) error {
 		}
 	}
 
-	if len(chosen) == 0 {
+	// Decide if there's any work: a client needs action if it's selected now
+	// OR was previously registered (and so may need to be removed). Without
+	// this, deselecting everything would print "nothing selected" and skip
+	// legitimate unregistrations.
+	chosenSet := map[string]bool{}
+	for _, c := range chosen {
+		chosenSet[c.ID] = true
+	}
+	detectedSet := map[string]bool{}
+	for _, c := range detected {
+		detectedSet[c.ID] = true
+	}
+	anyAction := false
+	for _, c := range detected {
+		if chosenSet[c.ID] || wasRegistered[c.ID] {
+			anyAction = true
+			break
+		}
+	}
+	if !anyAction {
 		fmt.Println("Nothing selected; no changes made.")
 		return nil
 	}
@@ -239,13 +340,29 @@ func RunInstall(opts Options) error {
 	if opts.DryRun {
 		fmt.Print("Dry run - no files will be changed.\n\n")
 	}
-	for _, c := range chosen {
-		r := applyClient(c, name, target, opts.DryRun)
-		tail := ""
-		if c.ReloadHint != "" {
-			tail = " -> " + c.ReloadHint
+
+	// Iterate detected clients in canonical registry order for stable output.
+	// Diff against the prior registration snapshot:
+	//   - selected now            -> applyClient (registers, or refreshes
+	//                                path/env idempotently if already there)
+	//   - was registered, unselected -> applyRemove
+	//   - otherwise               -> skip
+	for _, c := range Clients {
+		if !detectedSet[c.ID] {
+			continue
 		}
-		fmt.Printf("  %s: %s%s\n", c.Name, describe(r), tail)
+		switch {
+		case chosenSet[c.ID]:
+			r := applyClient(c, name, target, opts.DryRun)
+			tail := ""
+			if c.ReloadHint != "" {
+				tail = " -> " + c.ReloadHint
+			}
+			fmt.Printf("  %s: %s%s\n", c.Name, describe(r), tail)
+		case wasRegistered[c.ID]:
+			r := applyRemove(c, name, opts.DryRun)
+			fmt.Printf("  %s: %s\n", c.Name, describeRemove(r, opts.DryRun))
+		}
 	}
 	fmt.Println("\nDone.")
 	fmt.Println("Run `favro-mcp configure` anytime to change the toolset, clients, or re-login.")
