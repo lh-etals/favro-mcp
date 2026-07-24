@@ -11,23 +11,23 @@ import (
 func registerColumns(srv *mcp.Server, s *Server) {
 	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "list_columns",
-		Description: "List all columns on a specific board, sorted by position.",
+		Description: "List all columns on a specific board, sorted by position on Favro.",
 	}, s.listColumns)
 	addTool(s, srv, TierWrite, &mcp.Tool{
 		Name:        "create_column",
-		Description: "Create a new column on a board. Appends to the end unless a position is given.",
+		Description: "Create a new column on a board. Appends to the end unless a position is given on Favro.",
 	}, s.createColumn)
 	addTool(s, srv, TierWrite, &mcp.Tool{
 		Name:        "rename_column",
-		Description: "Rename a column (by column ID or name within a board).",
+		Description: "Rename a column (by column ID or name within a board) on Favro.",
 	}, s.renameColumn)
 	addTool(s, srv, TierWrite, &mcp.Tool{
 		Name:        "move_column",
-		Description: "Move a column to a new 0-based position.",
+		Description: "Move a column to a new 0-based position on Favro.",
 	}, s.moveColumn)
 	addTool(s, srv, TierDelete, &mcp.Tool{
 		Name:        "delete_column",
-		Description: "Delete a column from a board. WARNING: this also deletes all cards in the column.",
+		Description: "Delete a column from a board. WARNING: this also deletes all cards in the column on Favro.",
 	}, s.deleteColumn)
 }
 

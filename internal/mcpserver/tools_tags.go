@@ -10,7 +10,7 @@ import (
 func registerTags(srv *mcp.Server, s *Server) {
 	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "list_tags",
-		Description: "List all tags in the organization with their IDs, names, and colors. Use the tag name or ID with tag_card to add/remove tags from cards.",
+		Description: "List all tags in the organization with their IDs, names, and colors. Use the tag name or ID with tag_card to add/remove tags from cards on Favro.",
 	}, s.listTags)
 }
 

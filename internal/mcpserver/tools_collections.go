@@ -10,7 +10,7 @@ import (
 func registerCollections(srv *mcp.Server, s *Server) {
 	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "list_collections",
-		Description: "List all collections (folders) in the organization. Collections are folders that contain boards. If you are looking for a board but cannot find it with list_boards, it may be inside a collection. Use the collection name or ID with list_boards(collection=...) to see boards inside that collection.",
+		Description: "List all collections (folders) in the organization. Collections are folders that contain boards. If you are looking for a board but cannot find it with list_boards, it may be inside a collection. Use the collection name or ID with list_boards(collection=...) to see boards inside that collection on Favro.",
 	}, s.listCollections)
 }
 

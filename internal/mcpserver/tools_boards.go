@@ -13,22 +13,22 @@ import (
 func registerBoards(srv *mcp.Server, s *Server) {
 	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "list_boards",
-		Description: "List boards in the organization. By default lists boards at the TOP LEVEL only (not inside collections/folders). To find boards inside a collection: first call list_collections, then pass that collection's name or ID as the collection argument.",
+		Description: "List boards in the organization. By default lists boards at the TOP LEVEL only (not inside collections/folders). To find boards inside a collection: first call list_collections, then pass that collection's name or ID as the collection argument on Favro.",
 	}, s.listBoards)
 
 	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "get_board",
-		Description: "Get details of a specific board including its columns and lanes.",
+		Description: "Get details of a specific board including its columns and lanes on Favro.",
 	}, s.getBoard)
 
 	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "get_current_board",
-		Description: "Get details of the currently selected board, including its columns and lanes.",
+		Description: "Get details of the currently selected board, including its columns and lanes on Favro.",
 	}, s.getCurrentBoard)
 
 	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "set_board",
-		Description: "Select a board (by ID or name) as the active board for card operations.",
+		Description: "Select a board (by ID or name) as the active board for card operations on Favro.",
 	}, s.setBoard)
 }
 

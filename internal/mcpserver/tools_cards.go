@@ -15,23 +15,23 @@ const maxAttachmentBytes = 10 << 20 // 10 MB Favro attachment limit
 
 func registerCards(srv *mcp.Server, s *Server) {
 	// read
-	addTool(s, srv, TierRead, &mcp.Tool{Name: "list_cards", Description: "List cards on a specific board with pagination. Each page returns up to 100 cards."}, s.listCards)
-	addTool(s, srv, TierRead, &mcp.Tool{Name: "list_custom_fields", Description: "List custom field definitions in the organization. Use the customFieldId when updating card custom fields."}, s.listCustomFields)
-	addTool(s, srv, TierRead, &mcp.Tool{Name: "get_card_details", Description: "Get detailed information about a card: description, assignments, dates, custom fields, task lists with tasks, and comments."}, s.getCardDetails)
+	addTool(s, srv, TierRead, &mcp.Tool{Name: "list_cards", Description: "List cards on a specific board with pagination. Each page returns up to 100 cards on Favro."}, s.listCards)
+	addTool(s, srv, TierRead, &mcp.Tool{Name: "list_custom_fields", Description: "List custom field definitions in the organization. Use the customFieldId when updating card custom fields on Favro."}, s.listCustomFields)
+	addTool(s, srv, TierRead, &mcp.Tool{Name: "get_card_details", Description: "Get detailed information about a card: description, assignments, dates, custom fields, task lists with tasks, and comments on Favro."}, s.getCardDetails)
 	// write
-	addTool(s, srv, TierWrite, &mcp.Tool{Name: "add_comment", Description: "Add a comment to a card."}, s.addComment)
-	addTool(s, srv, TierWrite, &mcp.Tool{Name: "create_card", Description: "Create a new card on a board. The board defaults to the current board. Markdown description, tags, and assignees are optional."}, s.createCard)
-	addTool(s, srv, TierWrite, &mcp.Tool{Name: "update_card", Description: "Update a card's properties: name, markdown description, lane, archive state, custom fields, and task/checklist items."}, s.updateCard)
-	addTool(s, srv, TierWrite, &mcp.Tool{Name: "move_card", Description: "Move a card to a different column and/or lane, optionally to another board. Uses drag mode 'move' so a cross-board move relocates the card rather than copying it."}, s.moveCard)
-	addTool(s, srv, TierWrite, &mcp.Tool{Name: "assign_card", Description: "Assign or unassign a user (by ID, name, or email) from a card."}, s.assignCard)
-	addTool(s, srv, TierWrite, &mcp.Tool{Name: "tag_card", Description: "Add or remove a tag (by ID or name) from a card."}, s.tagCard)
-	addTool(s, srv, TierWrite, &mcp.Tool{Name: "upload_attachment", Description: "Upload a file attachment (max 10 MB) to a card."}, s.uploadAttachment)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "add_comment", Description: "Add a comment to a card on Favro."}, s.addComment)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "create_card", Description: "Create a new card on a board. The board defaults to the current board. Markdown description, tags, and assignees are optional on Favro."}, s.createCard)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "update_card", Description: "Update a card's properties: name, markdown description, lane, archive state, custom fields, and task/checklist items on Favro."}, s.updateCard)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "move_card", Description: "Move a card to a different column and/or lane, optionally to another board. Uses drag mode 'move' so a cross-board move relocates the card rather than copying it on Favro."}, s.moveCard)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "assign_card", Description: "Assign or unassign a user (by ID, name, or email) from a card on Favro."}, s.assignCard)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "tag_card", Description: "Add or remove a tag (by ID or name) from a card on Favro."}, s.tagCard)
+	addTool(s, srv, TierWrite, &mcp.Tool{Name: "upload_attachment", Description: "Upload a file attachment (max 10 MB) to a card on Favro."}, s.uploadAttachment)
 	// delete
-	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_card", Description: "Delete a card. Set everywhere=true to delete it from all boards."}, s.deleteCard)
-	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_comment", Description: "Delete a comment from a card by comment ID (undo for add_comment)."}, s.deleteComment)
-	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_task", Description: "Delete a task (checklist item) by task ID (undo for update_card's add_task)."}, s.deleteTask)
-	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_tasklist", Description: "Delete a task list (checklist) by tasklist ID (undo for update_card's add_tasklist)."}, s.deleteTasklist)
-	addTool(s, srv, TierDelete, &mcp.Tool{Name: "remove_attachment", Description: "Remove a file attachment from a card by its file URL (undo for upload_attachment)."}, s.removeAttachment)
+	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_card", Description: "Delete a card. Set everywhere=true to delete it from all boards on Favro."}, s.deleteCard)
+	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_comment", Description: "Delete a comment from a card by comment ID (undo for add_comment) on Favro."}, s.deleteComment)
+	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_task", Description: "Delete a task (checklist item) by task ID (undo for update_card's add_task) on Favro."}, s.deleteTask)
+	addTool(s, srv, TierDelete, &mcp.Tool{Name: "delete_tasklist", Description: "Delete a task list (checklist) by tasklist ID (undo for update_card's add_tasklist) on Favro."}, s.deleteTasklist)
+	addTool(s, srv, TierDelete, &mcp.Tool{Name: "remove_attachment", Description: "Remove a file attachment from a card by its file URL (undo for upload_attachment) on Favro."}, s.removeAttachment)
 }
 
 // --- list_cards ------------------------------------------------------------

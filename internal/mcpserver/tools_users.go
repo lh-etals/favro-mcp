@@ -10,11 +10,11 @@ import (
 func registerUsers(srv *mcp.Server, s *Server) {
 	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "list_users",
-		Description: "List all users in the current organization with their IDs, names, emails, and roles.",
+		Description: "List all users in the current organization with their IDs, names, emails, and roles on Favro.",
 	}, s.listUsers)
 	addTool(s, srv, TierRead, &mcp.Tool{
 		Name:        "get_user",
-		Description: "Look up a user by ID, name, or email address. Useful for resolving user IDs returned in card details (assignments, comments) to human-readable user information.",
+		Description: "Look up a user by ID, name, or email address. Useful for resolving user IDs returned in card details (assignments, comments) to human-readable user information on Favro.",
 	}, s.getUser)
 }
 
