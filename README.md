@@ -32,6 +32,11 @@ lets you toggle which ones to wire up with the arrow keys, pick a toolset
 (read / write / delete / custom), and signs you in. Run `favro-mcp configure`
 anytime to change what's connected.
 
+> **CLI preview** - the interactive CLI (`favro-mcp` with no arguments) is in
+> preview. Browse boards, list cards, view details, and run quick one-shot
+> commands like `favro-mcp list-cards --board Tasks`. Feedback and
+> contributions welcome.
+
 ## What it does
 
 - **32 tools across read / write / delete tiers** - Organizations, Collections,
@@ -244,6 +249,26 @@ wherever a Favro object is referenced.
 Lanes are read-only in the Favro API - they can't be created, renamed, or
 deleted. To place a card in a lane, pass the lane ID or name as the `lane`
 argument to `create_card`, `update_card`, or `move_card`.
+
+## CLI
+
+Run `favro-mcp` in a terminal to open the interactive app, or use one-shot
+commands for quick access. The interactive app lets you browse boards, list
+cards, and view card details without leaving the terminal.
+
+| Command | What it does |
+| --- | --- |
+| `list-boards` | List boards (optionally `--collection <name>`) |
+| `list-cards --board <b>` | List cards on a board (paginated, `--column`, `--page`) |
+| `get-card <id-or-name>` | Show full details of a card (`--board` to look up by name) |
+| `create-card --name <t> --board <b>` | Create a card (`--column`, `--description`) |
+| `add-comment <card> <text>` | Add a comment to a card |
+| `list-users` | List users in the organization |
+| `list-tags` | List all tags |
+
+Commands accept names or IDs and honour `--org` to scope to an organization
+(auto-selected if you have one). The CLI is in preview - report issues or ideas
+on the [issue tracker](https://github.com/lh-etals/favro-mcp/issues).
 
 ## Build from source
 
