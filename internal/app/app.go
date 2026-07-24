@@ -88,8 +88,8 @@ func buildMenu(loggedIn bool) []menuItem {
 		}
 	}
 	return []menuItem{
-		{label: "Browse boards", action: comingSoon},
-		{label: "List cards", action: comingSoon},
+		{label: "Browse boards", action: runBrowseBoards},
+		{label: "List cards", action: runListCards},
 		{label: "View card detail", action: comingSoon},
 		{label: "Users", action: comingSoon},
 		{label: "Tags", action: comingSoon},
