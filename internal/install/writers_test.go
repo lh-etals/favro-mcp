@@ -195,7 +195,6 @@ func TestTomlHandlesBOM(t *testing.T) {
 	}
 }
 
-
 // OpenCode: preserve existing enabled flag on re-configure.
 func TestOpenCodePreservesEnabled(t *testing.T) {
 	dir := t.TempDir()
