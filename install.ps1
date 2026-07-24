@@ -46,24 +46,17 @@ if ($userPath -notlike "*$InstallDir*") {
 Write-Host ""
 Write-Host "Installed: $Target"
 
-# Run the interactive setup (login if needed, then pick clients). PowerShell's
-# host is interactive, so the child processes inherit the console for prompts.
+# Run the interactive setup right away (login if needed, then toolset + clients).
+# PowerShell's host is interactive, so the child processes inherit the console.
 if ($Host.Name -eq 'ConsoleHost') {
   $credFile = Join-Path $env:USERPROFILE '.favro-mcp\credentials.json'
   if (Test-Path $credFile) {
-    Write-Host ""
     Write-Host "Favro credentials already configured (run 'favro-mcp login' to change)."
-  } else {
-    Write-Host ""
-    Write-Host "=== Setting up Favro credentials ==="
-    & $Target login
   }
   Write-Host ""
-  Write-Host "=== Registering with your AI clients ==="
-  & $Target install
+  Write-Host "=== Configuring favro-mcp (login + toolset + clients) ==="
+  & $Target configure
 } else {
   Write-Host ""
-  Write-Host "Next: set credentials and register with your AI clients:"
-  Write-Host "  favro-mcp login"
-  Write-Host "  favro-mcp install"
+  Write-Host "Then run:  favro-mcp configure"
 }

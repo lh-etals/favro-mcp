@@ -61,18 +61,15 @@ fi
 
 printf '\nInstalled: %s\n' "$TARGET"
 
-# If we have a controlling terminal, run the interactive setup right away. Skip
-# `login` if credentials already exist. Under `curl | sh` stdin is the script
-# pipe, so we read from /dev/tty to reach the user's terminal directly.
+# If we have a controlling terminal, run the interactive setup right away. Under
+# `curl | sh` stdin is the script pipe, so we read from /dev/tty to reach the
+# user's terminal directly.
 if [ -t 0 ] || [ -e /dev/tty ]; then
   if [ -f "$HOME/.favro-mcp/credentials.json" ]; then
     printf '\nFavro credentials already configured (run `favro-mcp login` to change).\n'
-  else
-    printf '\n=== Setting up Favro credentials ===\n'
-    "$TARGET" login </dev/tty 2>/dev/null || printf '  (login skipped or failed; run `favro-mcp login` later)\n'
   fi
-  printf '\n=== Registering with your AI clients ===\n'
-  "$TARGET" install </dev/tty 2>/dev/null || true
+  printf '\n=== Configuring favro-mcp (login + toolset + clients) ===\n'
+  "$TARGET" configure </dev/tty 2>/dev/null || printf '  (configure skipped or failed; run `favro-mcp configure` later)\n'
   if [ "$on_path" -eq 0 ]; then
     printf '\nNote: favro-mcp is at %s — reopen your shell or add it to PATH first.\n' "$INSTALL_DIR"
   fi
@@ -82,5 +79,5 @@ else
   elif [ "$on_path" -eq 0 ]; then
     printf 'Add it to PATH manually:\n  export PATH="%s:$PATH"\n' "$INSTALL_DIR"
   fi
-  printf '\nThen run:\n  favro-mcp login\n  favro-mcp install\n'
+  printf '\nThen run:\n  favro-mcp configure\n'
 fi

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lh-etals/favro-mcp/internal/credentials"
+	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/lh-etals/favro-mcp/internal/mcpserver"
 )
 
@@ -160,6 +161,11 @@ func RunInstall(opts Options) error {
 	if email != "" && token != "" {
 		env["FAVRO_EMAIL"] = email
 		env["FAVRO_API_TOKEN"] = token
+	} else if !credentials.Exists() && !opts.Yes {
+		// Interactive login (verify before saving, loop on failure).
+		if err := interactiveLogin(email); err != nil {
+			return err
+		}
 	} else if !credentials.Exists() {
 		fmt.Println("Note: Favro credentials not set. Run `favro-mcp login` (or export FAVRO_EMAIL/FAVRO_API_TOKEN) so the server can authenticate.")
 		fmt.Println()
@@ -194,14 +200,9 @@ func RunInstall(opts Options) error {
 			fmt.Println("No supported clients known for this platform.")
 			return nil
 		}
-		choices := make([]choice, 0, len(detected)+len(others))
-		for _, c := range detected {
-			choices = append(choices, choice{id: c.ID, label: c.Name + " (detected)", checked: true})
-		}
-		for _, c := range others {
-			choices = append(choices, choice{id: c.ID, label: c.Name, checked: false})
-		}
-		ids, err := multiSelect("Select clients to register favro-mcp with:", choices)
+		// TUI multi-select: only detected are selectable (pre-checked); press
+		// `v` to reveal the non-detected ones (greyed, not selectable).
+		ids, err := runClientsTUI(detected, others)
 		if err != nil {
 			return err
 		}
@@ -233,7 +234,32 @@ func RunInstall(opts Options) error {
 		fmt.Printf("  %s: %s%s\n", c.Name, describe(r), tail)
 	}
 	fmt.Println("\nDone.")
+	fmt.Println("Run `favro-mcp configure` anytime to change the toolset, clients, or re-login.")
 	return nil
+}
+
+// interactiveLogin prompts for email + token (hidden) via the TUI, verifies them
+// against the Favro API, and saves them only on success. Loops on failure.
+func interactiveLogin(prefillEmail string) error {
+	for {
+		email, token, ok, err := runLoginTUI(prefillEmail)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("login cancelled")
+		}
+		if _, err := favro.NewClient(email, token, "").GetOrganizations(); err != nil {
+			fmt.Printf("\nVerification failed: %v\nPlease try again.\n\n", err)
+			prefillEmail = email
+			continue
+		}
+		if err := credentials.Save(email, token); err != nil {
+			return err
+		}
+		fmt.Println("Credentials verified and saved.")
+		return nil
+	}
 }
 
 // RunUninstall removes this server from the MCP clients the user chooses.
@@ -363,9 +389,8 @@ func describeRemove(r ApplyResult, dryRun bool) string {
 //   - read / write / delete  -> FAVRO_TOOLSET=<tier>
 //   - custom                 -> FAVRO_TOOLS=<comma list of enabled tools>
 //
-// Interactive when neither --yes nor an explicit --toolset is given.
+// Interactive (TUI) when neither --yes nor an explicit --toolset is given.
 func chooseToolset(opts Options) (map[string]string, error) {
-	// Explicit tier from the flag.
 	switch opts.Toolset {
 	case mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete:
 		return map[string]string{"FAVRO_TOOLSET": opts.Toolset}, nil
@@ -375,48 +400,27 @@ func chooseToolset(opts Options) (map[string]string, error) {
 		}
 		return pickCustomTools()
 	case "":
-		// fall through to interactive / default below
 	default:
 		return nil, fmt.Errorf("unknown --toolset %q (use read, write, delete, or custom)", opts.Toolset)
 	}
-
 	if opts.Yes {
 		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}, nil
 	}
-
-	options := []string{
-		"Read-only            - list/get only. Safest; cannot change anything.",
-		"Read + Write         - also create/update/move cards, columns, tags. (recommended)",
-		"Read + Write + Delete- full access, including deletes.",
-		"Custom               - toggle each tool on/off individually.",
+	choice, err := runToolsetTUI()
+	if err != nil {
+		return nil, err
 	}
-	switch selectOne("Which toolset should the server expose?", options, 1) {
-	case 0:
-		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierRead}, nil
-	case 1:
-		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}, nil
-	case 2:
-		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierDelete}, nil
-	default:
+	if choice == "custom" {
 		return pickCustomTools()
 	}
+	return map[string]string{"FAVRO_TOOLSET": choice}, nil
 }
 
 // pickCustomTools shows every tool as a toggle (read+write pre-checked, delete
 // off) and returns a FAVRO_TOOLS allowlist of the selected tool names.
 func pickCustomTools() (map[string]string, error) {
 	catalog := mcpserver.ToolCatalog()
-	choices := make([]choice, 0, len(catalog))
-	for _, t := range catalog {
-		// Default to the "write" preset on: read+write checked, delete off.
-		checked := t.Tier == mcpserver.TierRead || t.Tier == mcpserver.TierWrite
-		choices = append(choices, choice{
-			id:      t.Name,
-			label:   fmt.Sprintf("%-20s [%s] %s", t.Name, t.Tier, t.Description),
-			checked: checked,
-		})
-	}
-	ids, err := multiSelect("Toggle the tools to expose (space toggles, enter confirms):", choices)
+	ids, err := runToolsTUI(catalog)
 	if err != nil {
 		return nil, err
 	}

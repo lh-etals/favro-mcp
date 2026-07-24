@@ -23,7 +23,7 @@ func main() {
 		case "login":
 			runLogin(os.Args[2:])
 			return
-		case "install":
+		case "install", "configure", "setup":
 			runInstaller(false, os.Args[2:])
 			return
 		case "uninstall":
