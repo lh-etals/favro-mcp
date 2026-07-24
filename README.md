@@ -13,7 +13,7 @@ have installed**, and registers itself with the ones you pick.
 - **Universal one-command installers** — `curl | sh` on macOS/Linux,
   `irm | iex` on Windows
 - **Auto-registers** with Claude Desktop, Claude Code, Cursor, Codex, Gemini
-  CLI, Windsurf, Zed, Cline, Roo Code, Amazon Q, and Continue
+  CLI, Windsurf, Zed, Cline, Roo Code, Amazon Q, Continue, OpenCode, and VS Code
 - **Secure by design** — your Favro token lives in your local client config and
   talks straight to the Favro API. No proxy, no third-party service.
 
@@ -132,24 +132,22 @@ server returns a clear error on first use.
 
 ---
 
-## Why this fork?
+## Favro MCP distributions
 
-The upstream [truls27a/favro-mcp](https://github.com/truls27a/favro-mcp) is a
-Python server installed via `uv`/`pip`. This is a Go rewrite that exposes the
-**same 28 tools against the same Favro API**, but ships as one static binary
-with a universal installer and built-in client detection.
+There's more than one way to run Favro from an AI agent. Here are the known
+MCP distributions for Favro:
 
-| | Python upstream | **This fork (Go)** |
-| --- | --- | --- |
-| Runtime | Python + `uv`/`pip` | **None** — one static binary |
-| Install | Per-OS Python setup | **`curl \| sh`** / **`irm \| iex`**, 6 targets |
-| Size | Python env + deps | **~9 MB** single file |
-| Cross-platform | Per-platform packaging | `CGO_ENABLED=0`, 6 targets from one build |
-| AI-client wiring | Manual JSON editing | **Auto-detects 11 clients**, writes config for you |
-| Favro tools | 28 | **28 (identical API surface)** |
-
-Full credit to the original — this repo is a faster, lighter way to run the
-same thing.
+- **This repo — `lh-etals/favro-mcp` (Go).**
+  A single static binary (~9 MB) with a universal `curl | sh` / `irm | iex`
+  installer and built-in auto-detection of 13 AI clients. 32 tools across
+  read / write / delete tiers (plus per-tool custom). No runtime dependencies.
+  [github.com/lh-etals/favro-mcp](https://github.com/lh-etals/favro-mcp) ·
+  [releases](https://github.com/lh-etals/favro-mcp/releases)
+- **`truls27a/favro-mcp` (Python).**
+  The original Favro MCP server, installed via `uv`/`pip` (`uvx favro-mcp`).
+  This Go repo forked from it, kept feature parity with the same Favro API
+  surface, and rewrote the server in Go with an installer on top.
+  [github.com/truls27a/favro-mcp](https://github.com/truls27a/favro-mcp)
 
 ---
 
