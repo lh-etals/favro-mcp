@@ -207,7 +207,7 @@ func RunInstall(opts Options) error {
 		}
 		// TUI multi-select: only detected are selectable (pre-checked); press
 		// `v` to reveal the non-detected ones (greyed, not selectable).
-		ids, err := runClientsTUI(detected, others)
+		ids, err := runClientsHuh(detected, others)
 		if err != nil {
 			return err
 		}
@@ -247,12 +247,9 @@ func RunInstall(opts Options) error {
 // against the Favro API, and saves them only on success. Loops on failure.
 func interactiveLogin(prefillEmail string) error {
 	for {
-		email, token, ok, err := runLoginTUI(prefillEmail)
+		email, token, err := runLoginHuh(prefillEmail)
 		if err != nil {
-			return err
-		}
-		if !ok {
-			return ErrCancelled
+			return err // includes ErrCancelled
 		}
 		if _, err := favro.NewClient(email, token, "").GetOrganizations(); err != nil {
 			fmt.Printf("\nVerification failed: %v\nPlease try again.\n\n", err)
@@ -418,7 +415,7 @@ func chooseToolset(opts Options) (map[string]string, error) {
 	if opts.Yes {
 		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}, nil
 	}
-	choice, err := runToolsetTUI()
+	choice, err := runToolsetHuh()
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +429,7 @@ func chooseToolset(opts Options) (map[string]string, error) {
 // off) and returns a FAVRO_TOOLS allowlist of the selected tool names.
 func pickCustomTools() (map[string]string, error) {
 	catalog := mcpserver.ToolCatalog()
-	ids, err := runToolsTUI(catalog)
+	ids, err := runToolsHuh(catalog)
 	if err != nil {
 		return nil, err
 	}

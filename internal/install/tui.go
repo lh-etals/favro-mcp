@@ -1,538 +1,202 @@
 package install
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
-	"golang.org/x/term"
 
 	"github.com/lh-etals/favro-mcp/internal/mcpserver"
 )
 
+// ErrCancelled is returned when the user aborts an interactive prompt.
+var ErrCancelled = fmt.Errorf("cancelled")
+
 // Styling ---------------------------------------------------------------------
 
 var (
-	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
+	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
 	subtleStyle = lipgloss.NewStyle().Faint(true)
-	cursorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("213")).Bold(true)
-	checkStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("36"))
-	greyStyle   = lipgloss.NewStyle().Faint(true)
-	detectedTag = subtleStyle.Render("(detected)")
-	footerStyle = lipgloss.NewStyle().Faint(true).MarginTop(1)
 )
-
-func footer(shortcuts string) string {
-	return footerStyle.Render("  " + shortcuts)
-}
-
-// quitKeyMsg lets a model carry its result out of the program.
-type doneMsg struct{}
-
-// --- clients multiselect -----------------------------------------------------
-
-type clientItem struct {
-	def      ClientDef
-	detected bool
-}
-
-type clientsModel struct {
-	items     []clientItem
-	cursor    int // index into selectable (detected) items
-	checked   map[string]bool
-	showAll   bool
-	cancelled bool
-}
-
-func newClientsModel(detected, others []ClientDef) clientsModel {
-	items := make([]clientItem, 0, len(detected)+len(others))
-	checked := map[string]bool{}
-	for _, c := range detected {
-		items = append(items, clientItem{def: c, detected: true})
-		checked[c.ID] = true // detected are pre-selected
-	}
-	for _, c := range others {
-		items = append(items, clientItem{def: c, detected: false})
-	}
-	return clientsModel{items: items, checked: checked}
-}
-
-// selectable returns indices of detected items.
-func (m clientsModel) selectable() []int {
-	out := []int{}
-	for i, it := range m.items {
-		if it.detected {
-			out = append(out, i)
-		}
-	}
-	return out
-}
-
-func (m clientsModel) Init() tea.Cmd { return nil }
-
-func (m clientsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch strings.ToLower(msg.String()) {
-		case "ctrl+c", "q", "esc":
-			m.cancelled = true
-			return m, tea.Quit
-		case "up", "k":
-			sel := m.selectable()
-			if len(sel) > 0 {
-				m.cursor = (m.cursor - 1 + len(sel)) % len(sel)
-			}
-		case "down", "j":
-			sel := m.selectable()
-			if len(sel) > 0 {
-				m.cursor = (m.cursor + 1) % len(sel)
-			}
-		case " ":
-			sel := m.selectable()
-			if len(sel) > 0 {
-				idx := sel[m.cursor%len(sel)]
-				id := m.items[idx].def.ID
-				m.checked[id] = !m.checked[id]
-			}
-		case "v":
-			m.showAll = !m.showAll
-		case "enter":
-			return m, tea.Quit
-		}
-	}
-	return m, nil
-}
-
-func (m clientsModel) View() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("  Select AI clients to register with"))
-	b.WriteString("\n\n")
-	sel := m.selectable()
-	curIdx := -1
-	if len(sel) > 0 {
-		curIdx = sel[m.cursor%len(sel)]
-	}
-	othersCount := 0
-	for i, it := range m.items {
-		if !it.detected {
-			othersCount++
-		}
-		if !it.detected && !m.showAll {
-			continue
-		}
-		if !it.detected {
-			// non-detected: greyed, not selectable
-			b.WriteString(greyStyle.Render("      "+it.def.Name+" (not detected)") + "\n")
-			continue
-		}
-		cursor := " "
-		if i == curIdx {
-			cursor = cursorStyle.Render(">")
-		}
-		mark := "[ ]"
-		if m.checked[it.def.ID] {
-			mark = checkStyle.Render("[x]")
-		}
-		b.WriteString(fmt.Sprintf("  %s %s %s %s\n", cursor, mark, it.def.Name, detectedTag))
-	}
-	if !m.showAll && othersCount > 0 {
-		b.WriteString(subtleStyle.Render(fmt.Sprintf("    + %d other client(s) not detected (press v to show)", othersCount)) + "\n")
-	}
-	b.WriteString(footer("up/down move · space toggle · v show all · enter confirm · q cancel"))
-	return b.String()
-}
-
-// selectedIDs returns the chosen client IDs after the program ends.
-func (m clientsModel) selectedIDs() []string {
-	out := []string{}
-	for _, it := range m.items {
-		if it.detected && m.checked[it.def.ID] {
-			out = append(out, it.def.ID)
-		}
-	}
-	return out
-}
-
-// ErrCancelled is returned by the TUI when the user aborts; callers treat it as
-// a clean exit (no changes), not an error.
-var ErrCancelled = errors.New("cancelled")
-
-// runClientsTUI runs the client multi-select. Falls back to a numbered prompt
-// when stdin is not a TTY. Returns ErrCancelled on abort.
-func runClientsTUI(detected, others []ClientDef) ([]string, error) {
-	if !isTTY() {
-		return fallbackClientsSelect(detected, others), nil
-	}
-	m := newClientsModel(detected, others)
-	p := tea.NewProgram(m, tea.WithAltScreen())
-	res, err := p.Run()
-	if err != nil {
-		return nil, err
-	}
-	cm := res.(clientsModel)
-	if cm.cancelled {
-		return nil, ErrCancelled
-	}
-	return cm.selectedIDs(), nil
-}
-
-// fallbackClientsSelect: numbered prompt for non-TTY. Only DETECTED clients are
-// selectable (matching the TUI behaviour); others are listed greyed.
-func fallbackClientsSelect(detected, others []ClientDef) []string {
-	fmt.Println("Select clients to register with (enter comma-separated numbers; blank = keep * rows):")
-	idx := 0
-	idByNum := map[int]string{}
-	for _, c := range detected {
-		idx++
-		idByNum[idx] = c.ID
-		fmt.Printf("  * %d. %s\n", idx, c.Name)
-	}
-	for _, c := range others {
-		fmt.Printf("    - %s (not detected, not selectable)\n", c.Name)
-	}
-	line := readLine()
-	if strings.TrimSpace(line) == "" {
-		var out []string
-		for _, c := range detected {
-			out = append(out, c.ID)
-		}
-		return out
-	}
-	var out []string
-	for _, p := range strings.Split(line, ",") {
-		var n int
-		if _, err := fmt.Sscanf(strings.TrimSpace(p), "%d", &n); err == nil {
-			if id, ok := idByNum[n]; ok {
-				out = append(out, id)
-			}
-		}
-	}
-	return out
-}
 
 // --- toolset select ----------------------------------------------------------
 
-type toolsetModel struct {
-	choices   []string
-	descs     []string
-	cursor    int
-	cancelled bool
-}
-
-var toolsetChoices = []string{"Read-only", "Read + Write", "Read + Write + Delete", "Custom"}
-var toolsetDescs = []string{
-	"list/get only. Safest; cannot change anything.",
-	"also create/update/move cards, columns, tags, comments, attachments.",
-	"full access, including deletes.",
-	"toggle each tool on/off individually.",
-}
-var toolsetVals = []string{mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete, "custom"}
-
-func newToolsetModel() toolsetModel {
-	return toolsetModel{choices: toolsetChoices, descs: toolsetDescs, cursor: 1}
-}
-
-func (m toolsetModel) Init() tea.Cmd { return nil }
-
-func (m toolsetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	k, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
+func runToolsetHuh() (string, error) {
+	var choice string
+	opts := []huh.Option[string]{
+		huh.NewOption("Read-only", mcpserver.TierRead),
+		huh.NewOption("Read + Write (recommended)", mcpserver.TierWrite),
+		huh.NewOption("Read + Write + Delete", mcpserver.TierDelete),
+		huh.NewOption("Custom (toggle each tool)", "custom"),
 	}
-	switch strings.ToLower(k.String()) {
-	case "ctrl+c", "q", "esc":
-		m.cancelled = true
-		return m, tea.Quit
-	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case "down", "j":
-		if m.cursor < len(m.choices)-1 {
-			m.cursor++
-		}
-	case "enter":
-		return m, tea.Quit
-	}
-	return m, nil
-}
-
-func (m toolsetModel) View() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("  Choose the toolset the server exposes"))
-	b.WriteString("\n\n")
-	for i, c := range m.choices {
-		cursor := " "
-		if i == m.cursor {
-			cursor = cursorStyle.Render(">")
-		}
-		line := fmt.Sprintf("  %s %s", cursor, c)
-		if i == m.cursor {
-			line += "  " + subtleStyle.Render(m.descs[i])
-		}
-		b.WriteString(line + "\n")
-	}
-	b.WriteString(footer("up/down move · enter select · q cancel"))
-	return b.String()
-}
-
-// runToolsetTUI returns one of mcpserver.TierRead/mcpserver.TierWrite/mcpserver.TierDelete/"custom".
-func runToolsetTUI() (string, error) {
-	if !isTTY() {
-		i := selectOne("Which toolset should the server expose?", toolsetChoices, 1)
-		return toolsetVals[i], nil
-	}
-	m := newToolsetModel()
-	p := tea.NewProgram(m, tea.WithAltScreen())
-	res, err := p.Run()
-	if err != nil {
+	form := huh.NewForm(
+		huh.NewGroup(huh.NewSelect[string]().
+			Title("Toolset").
+			Description("Which tools should the server expose?").
+			Options(opts...).
+			Value(&choice)),
+	)
+	if err := runForm(form); err != nil {
 		return "", err
 	}
-	mm := res.(toolsetModel)
-	if mm.cancelled {
-		return "", ErrCancelled
+	return choice, nil
+}
+
+// --- client multi-select -----------------------------------------------------
+
+func runClientsHuh(detected, others []ClientDef) ([]string, error) {
+	type row struct {
+		value   string
+		selected bool
 	}
-	return toolsetVals[mm.cursor], nil
+	rows := make([]row, 0, len(detected)+len(others))
+	for _, c := range detected {
+		rows = append(rows, row{value: c.ID, selected: true})
+	}
+	for _, c := range others {
+		rows = append(rows, row{value: c.ID, selected: false})
+	}
+	opts := make([]huh.Option[string], 0, len(detected)+len(others))
+	idx := 0
+	idToName := map[string]string{}
+	for _, c := range detected {
+		idToName[c.ID] = c.Name + " (detected)"
+		huhOpt := huh.NewOption(c.Name+" (detected)", c.ID)
+		huhOpt = huhOpt.Selected(true)
+		opts = append(opts, huhOpt)
+		idx++
+	}
+	_ = idx
+	for _, c := range others {
+		idToName[c.ID] = c.Name
+		opts = append(opts, huh.NewOption(c.Name, c.ID))
+	}
+	var selected []string
+	form := huh.NewForm(
+		huh.NewGroup(huh.NewMultiSelect[string]().
+			Title("AI clients").
+			Description("Select which clients to register with. Detected clients are pre-selected.").
+			Options(opts...).
+			Value(&selected)),
+	)
+	if err := runForm(form); err != nil {
+		return nil, err
+	}
+	return selected, nil
 }
 
 // --- custom tools toggle -----------------------------------------------------
 
-type toolsModel struct {
-	names     []string
-	descs     []string
-	tiers     []string
-	checked   []bool
-	cursor    int
-	cancelled bool
-}
-
-func newToolsModel(catalog []mcpserver.ToolInfo) toolsModel {
-	names := make([]string, len(catalog))
-	descs := make([]string, len(catalog))
-	tiers := make([]string, len(catalog))
-	checked := make([]bool, len(catalog))
-	for i, t := range catalog {
-		names[i] = t.Name
-		descs[i] = t.Description
-		tiers[i] = t.Tier
-		// default to the write preset: read+write on, delete off
-		checked[i] = t.Tier == mcpserver.TierRead || t.Tier == mcpserver.TierWrite
-	}
-	return toolsModel{names: names, descs: descs, tiers: tiers, checked: checked}
-}
-
-func (m toolsModel) Init() tea.Cmd { return nil }
-
-func (m toolsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	k, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
-	}
-	switch strings.ToLower(k.String()) {
-	case "ctrl+c", "q", "esc":
-		m.cancelled = true
-		return m, tea.Quit
-	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
+func runToolsHuh(catalog []mcpserver.ToolInfo) ([]string, error) {
+	opts := make([]huh.Option[string], 0, len(catalog))
+	for _, t := range catalog {
+		label := fmt.Sprintf("%s (%s)", t.Name, t.Tier)
+		opt := huh.NewOption(label, t.Name)
+		if t.Tier == mcpserver.TierRead || t.Tier == mcpserver.TierWrite {
+			opt = opt.Selected(true)
 		}
-	case "down", "j":
-		if m.cursor < len(m.names)-1 {
-			m.cursor++
-		}
-	case " ":
-		if len(m.checked) > 0 && m.cursor < len(m.checked) {
-			m.checked[m.cursor] = !m.checked[m.cursor]
-		}
-	case "enter":
-		return m, tea.Quit
+		opts = append(opts, opt)
 	}
-	return m, nil
-}
-
-func (m toolsModel) View() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("  Toggle individual tools (space toggles)"))
-	b.WriteString("\n\n")
-	for i, n := range m.names {
-		cursor := " "
-		if i == m.cursor {
-			cursor = cursorStyle.Render(">")
-		}
-		mark := "[ ]"
-		if m.checked[i] {
-			mark = checkStyle.Render("[x]")
-		}
-		b.WriteString(fmt.Sprintf("  %s %s %-20s %s\n", cursor, mark, n, subtleStyle.Render("("+m.tiers[i]+") "+truncate(m.descs[i], 50))))
-	}
-	b.WriteString(footer("up/down move · space toggle · enter confirm · q cancel"))
-	return b.String()
-}
-
-func (m toolsModel) selected() []string {
-	out := []string{}
-	for i, on := range m.checked {
-		if on {
-			out = append(out, m.names[i])
-		}
-	}
-	return out
-}
-
-func runToolsTUI(catalog []mcpserver.ToolInfo) ([]string, error) {
-	if !isTTY() {
-		return fallbackToolsSelect(catalog), nil
-	}
-	m := newToolsModel(catalog)
-	p := tea.NewProgram(m, tea.WithAltScreen())
-	res, err := p.Run()
-	if err != nil {
+	var selected []string
+	form := huh.NewForm(
+		huh.NewGroup(huh.NewMultiSelect[string]().
+			Title("Tools").
+			Description("Toggle individual tools on/off. Read+Write pre-selected.").
+			Options(opts...).
+			Value(&selected)),
+	)
+	if err := runForm(form); err != nil {
 		return nil, err
 	}
-	mm := res.(toolsModel)
-	if mm.cancelled {
-		return nil, ErrCancelled
-	}
-	return mm.selected(), nil
-}
-
-func fallbackToolsSelect(catalog []mcpserver.ToolInfo) []string {
-	choices := make([]choice, 0, len(catalog))
-	for _, t := range catalog {
-		choices = append(choices, choice{id: t.Name, label: t.Name + " (" + t.Tier + ")", checked: t.Tier == mcpserver.TierRead || t.Tier == mcpserver.TierWrite})
-	}
-	ids, _ := multiSelect("Toggle tools:", choices)
-	return ids
+	return selected, nil
 }
 
 // --- login inputs ------------------------------------------------------------
 
-type loginModel struct {
-	emailTI   textinput.Model
-	tokenTI   textinput.Model
-	focus     int // 0=email, 1=token
-	cancelled bool
-}
-
-func newLoginModel(email string) loginModel {
-	e := textinput.New()
-	e.Placeholder = "you@example.com"
-	e.Prompt = "  Email:  "
-	e.Width = 40
-	e.SetValue(email)
-	e.Focus()
-	e.Cursor.Blink = false
-	t := textinput.New()
-	t.Placeholder = "hidden while typing"
-	t.Prompt = "  Token:  "
-	t.Width = 40
-	t.EchoMode = textinput.EchoPassword
-	t.Cursor.Blink = false
-	return loginModel{emailTI: e, tokenTI: t}
-}
-
-func (m loginModel) Init() tea.Cmd { return nil }
-
-func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch strings.ToLower(msg.String()) {
-		case "ctrl+c", "esc":
-			m.cancelled = true
-			return m, tea.Quit
-		case "tab", "shift+tab":
-			if m.focus == 0 {
-				m.focus = 1
-				m.tokenTI.Focus()
-				m.emailTI.Blur()
-			} else {
-				m.focus = 0
-				m.emailTI.Focus()
-				m.tokenTI.Blur()
-			}
-			return m, nil
-		case "enter":
-			if m.focus == 0 {
-				m.focus = 1
-				m.tokenTI.Focus()
-				m.emailTI.Blur()
-			} else {
-				return m, tea.Quit
-			}
-			return m, nil
-		}
+func runLoginHuh(prefillEmail string) (email, token string, err error) {
+	email = prefillEmail
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Favro email").
+				Value(&email).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("email is required")
+					}
+					return nil
+				}),
+			huh.NewInput().
+				Title("Favro API token").
+				EchoMode(huh.EchoModePassword).
+				Value(&token).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("token is required")
+					}
+					return nil
+				}),
+		),
+	)
+	if e := runForm(form); e != nil {
+		return "", "", e
 	}
-	var cmd tea.Cmd
-	if m.focus == 0 {
-		m.emailTI, cmd = m.emailTI.Update(msg)
-	} else {
-		m.tokenTI, cmd = m.tokenTI.Update(msg)
-	}
-	return m, cmd
-}
-
-func (m loginModel) View() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("  Log in to Favro"))
-	b.WriteString("\n\n")
-	b.WriteString(m.emailTI.View() + "\n")
-	b.WriteString(m.tokenTI.View() + "\n")
-	b.WriteString(footer("tab next field · enter submit · esc cancel"))
-	return b.String()
-}
-
-// runLoginTUI collects email + token (token hidden). Returns empty ok=false if cancelled.
-func runLoginTUI(prefillEmail string) (email, token string, ok bool, err error) {
-	if !isTTY() {
-		r := sharedStdinReader()
-		fmt.Print("Favro email: ")
-		e, err := r.ReadString('\n')
-		if err != nil {
-			return "", "", false, nil
-		}
-		fmt.Print("Favro API token: ")
-		t, err := r.ReadString('\n')
-		if err != nil {
-			return "", "", false, nil
-		}
-		e, t = strings.TrimSpace(e), strings.TrimSpace(t)
-		if e == "" || t == "" {
-			return "", "", false, nil
-		}
-		return e, t, true, nil
-	}
-	m := newLoginModel(prefillEmail)
-	p := tea.NewProgram(m, tea.WithAltScreen())
-	res, err := p.Run()
-	if err != nil {
-		return "", "", false, err
-	}
-	mm := res.(loginModel)
-	if mm.cancelled {
-		return "", "", false, nil
-	}
-	return mm.emailTI.Value(), mm.tokenTI.Value(), true, nil
+	return email, token, nil
 }
 
 // --- helpers -----------------------------------------------------------------
 
-func isTTY() bool {
-	return term.IsTerminal(int(os.Stdin.Fd()))
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
+// runForm runs a huh form with proper TTY detection. On non-TTY, returns
+// ErrCancelled (the caller should fall back to flag/env values or print a hint).
+func runForm(form *huh.Form) error {
+	if !isTTY() {
+		return ErrCancelled
 	}
-	return s[:n-1] + "…"
+	return form.Run()
 }
 
-func readLine() string {
-	r := sharedStdinReader()
-	line, _ := r.ReadString('\n')
-	return line
+func isTTY() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
+// --- interactive app (bare invocation) ---------------------------------------
+
+// RunApp is the interactive CLI app launched by bare `favro-mcp`. It shows a
+// main menu with navigation and configuration options.
+func RunApp() {
+	for {
+		var action string
+		form := huh.NewForm(
+			huh.NewGroup(huh.NewSelect[string]().
+				Title("favro-mcp").
+				Description("What would you like to do?").
+				Options(
+					huh.NewOption("Configure AI clients", "configure"),
+					huh.NewOption("Log in to Favro", "login"),
+					huh.NewOption("Quit", "quit"),
+				).
+				Value(&action)),
+		)
+		if err := form.Run(); err != nil {
+			return // user cancelled or pipe closed
+		}
+		switch action {
+		case "quit":
+			return
+		case "configure":
+			if err := RunInstall(Options{}); err != nil && err != ErrCancelled {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		case "login":
+			if err := interactiveLogin(""); err != nil && err != ErrCancelled {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		}
+	}
 }

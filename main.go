@@ -17,10 +17,13 @@ import (
 )
 
 func main() {
-	// Subcommands: login (credentials), install/uninstall (register with AI
-	// clients). Any other invocation runs the stdio MCP server.
+	// Subcommands route to specific functions. Bare invocation (no args) opens
+	// the interactive app on a TTY, or prints a hint on a pipe.
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "mcp", "serve":
+			runMCPServer()
+			return
 		case "login":
 			runLogin(os.Args[2:])
 			return
@@ -33,7 +36,25 @@ func main() {
 		}
 	}
 
-	// Run the MCP server over stdio.
+	// Bare invocation: interactive app on a TTY; hint on a pipe.
+	if isTerminal() {
+		install.RunApp()
+		return
+	}
+	// Non-interactive (piped, cron, etc.): print a hint, don't hang.
+	fmt.Println("favro-mcp - MCP server for Favro.")
+	fmt.Println("Run 'favro-mcp' in a terminal for the interactive app, or 'favro-mcp mcp' for the MCP server.")
+}
+
+// isTerminal returns true if stdin AND stdout are TTYs.
+func isTerminal() bool {
+	fi, _ := os.Stdin.Stat()
+	fo, _ := os.Stdout.Stat()
+	return (fi.Mode()&os.ModeCharDevice != 0) && (fo.Mode()&os.ModeCharDevice != 0)
+}
+
+// runMCPServer starts the stdio MCP server (what AI clients launch).
+func runMCPServer() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := mcpserver.NewServer().Run(ctx); err != nil {
