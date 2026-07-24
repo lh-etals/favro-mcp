@@ -2,12 +2,12 @@ package install
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lh-etals/favro-mcp/internal/credentials"
 	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/lh-etals/favro-mcp/internal/mcpserver"
@@ -209,50 +209,30 @@ func describe(r ApplyResult) string {
 
 // RunInstall detects installed MCP clients and registers this server with the
 // ones the user chooses. It is idempotent and non-destructive.
+//
+// On a real terminal (no --yes) the entire interactive flow - toolset, client
+// selection, optional custom tools, optional login, applying, summary - runs as
+// a single tea.Program so the screen evolves in place instead of appending a
+// new block per step. In unattended mode (--yes or no TTY) it applies sensible
+// defaults and prints results directly.
 func RunInstall(opts Options) error {
 	name := opts.Name
 	if name == "" {
 		name = "favro"
 	}
 
-	// Toolset selection: which tools the registered server exposes.
-	env := map[string]string{}
-	tsEnv, err := chooseToolset(opts)
-	if err != nil {
-		return err
-	}
-	for k, v := range tsEnv {
-		env[k] = v
-	}
-
 	// Credentials are managed centrally by `favro-mcp login` (read by the
 	// server at runtime), so client configs do not embed secrets by default.
 	// We only embed them when explicitly provided via flags or FAVRO_* env.
 	email := opts.Email
-	token := opts.Token
 	if email == "" {
 		email = os.Getenv("FAVRO_EMAIL")
 	}
+	token := opts.Token
 	if token == "" {
 		token = os.Getenv("FAVRO_API_TOKEN")
 	}
-	if email != "" && token != "" {
-		env["FAVRO_EMAIL"] = email
-		env["FAVRO_API_TOKEN"] = token
-	} else if !credentials.Exists() && !opts.Yes {
-		// Interactive login (verify before saving, loop on failure).
-		if err := interactiveLogin(email); err != nil {
-			return err
-		}
-	} else if !credentials.Exists() {
-		fmt.Println("Note: Favro credentials not set. Run `favro-mcp login` (or export FAVRO_EMAIL/FAVRO_API_TOKEN) so the server can authenticate.")
-		fmt.Println()
-	}
-
-	target, err := serverTarget(env)
-	if err != nil {
-		return err
-	}
+	embedCreds := email != "" && token != ""
 
 	var detected, others []ClientDef
 	for _, c := range Clients {
@@ -263,106 +243,92 @@ func RunInstall(opts Options) error {
 		}
 	}
 
+	if !opts.Yes && isTTY() {
+		return runInteractive(opts, name, email, token, embedCreds, detected, others)
+	}
+	return runUnattended(opts, name, email, token, embedCreds, detected, others)
+}
+
+// runInteractive drives the single-program installer UI.
+func runInteractive(opts Options, name, email, token string, embedCreds bool, detected, others []ClientDef) error {
+	if len(detected) == 0 && len(others) == 0 {
+		fmt.Println("No supported clients known for this platform.")
+		return nil
+	}
 	// Snapshot each detected client's current registration state BEFORE the
-	// prompt so we can diff it against the user's new selection afterwards:
-	// deselected clients that were previously registered get unregistered.
+	// prompt so deselected-but-registered clients can be unregistered.
 	wasRegistered := map[string]bool{}
 	for _, c := range detected {
 		if isCurrentlyRegistered(c, name) {
 			wasRegistered[c.ID] = true
 		}
 	}
+	needLogin := !embedCreds && !credentials.Exists()
+	m := newInstallModel(opts, name, email, token, embedCreds, needLogin, detected, others, wasRegistered)
+	return runForm(m)
+}
 
-	fmt.Printf("favro-mcp installer - registering server %q\n", name)
-	fmt.Printf("  command: %s\n\n", target.Command)
-
-	var chosen []ClientDef
-	if opts.Yes {
-		chosen = detected
-		if len(chosen) == 0 {
-			fmt.Println("No supported clients detected. Re-run without --yes to pick manually.")
-			return nil
+// runUnattended applies defaults (Read+Write toolset, all detected clients)
+// without any prompts. Used for --yes or when stdin/stdout is not a TTY.
+func runUnattended(opts Options, name, email, token string, embedCreds bool, detected, others []ClientDef) error {
+	env := map[string]string{}
+	switch opts.Toolset {
+	case mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete:
+		env["FAVRO_TOOLSET"] = opts.Toolset
+	case "custom":
+		if opts.Yes {
+			return fmt.Errorf("--toolset=custom requires interactive selection (omit --yes)")
 		}
-	} else {
-		if len(detected) == 0 && len(others) == 0 {
-			fmt.Println("No supported clients known for this platform.")
-			return nil
-		}
-		// Numbered multi-select: detected clients are pre-checked, others can
-		// be toggled on by number. On a non-TTY the prompt returns
-		// ErrCancelled and we fall back to all detected clients (--yes mode).
-		ids, err := promptClients(detected, others)
-		if err != nil {
-			if !errors.Is(err, ErrCancelled) || isTTY() {
-				return err
-			}
-			// Non-interactive: fall back to all detected clients.
-			ids = nil
-			for _, c := range detected {
-				ids = append(ids, c.ID)
-			}
-		}
-		idSet := map[string]bool{}
-		for _, id := range ids {
-			idSet[id] = true
-		}
-		for _, c := range Clients {
-			if idSet[c.ID] {
-				chosen = append(chosen, c)
-			}
-		}
+		// Non-interactive custom selection isn't possible; default to Read+Write.
+		env["FAVRO_TOOLSET"] = mcpserver.TierWrite
+	case "":
+		env["FAVRO_TOOLSET"] = mcpserver.TierWrite
+	default:
+		return fmt.Errorf("unknown --toolset %q (use read, write, delete, or custom)", opts.Toolset)
 	}
 
-	// Decide if there's any work: a client needs action if it's selected now
-	// OR was previously registered (and so may need to be removed). Without
-	// this, deselecting everything would print "nothing selected" and skip
-	// legitimate unregistrations.
-	chosenSet := map[string]bool{}
-	for _, c := range chosen {
-		chosenSet[c.ID] = true
+	if embedCreds {
+		env["FAVRO_EMAIL"] = email
+		env["FAVRO_API_TOKEN"] = token
+	} else if !credentials.Exists() {
+		if !opts.Yes {
+			// Non-interactive, no creds, no --yes: nothing more we can do.
+			return ErrCancelled
+		}
+		fmt.Println("Note: Favro credentials not set. Run `favro-mcp login` (or export FAVRO_EMAIL/FAVRO_API_TOKEN) so the server can authenticate.")
+		fmt.Println()
 	}
+
+	target, err := serverTarget(env)
+	if err != nil {
+		return err
+	}
+
+	if len(detected) == 0 {
+		fmt.Println("No supported clients detected. Re-run without --yes to pick manually.")
+		return nil
+	}
+
 	detectedSet := map[string]bool{}
 	for _, c := range detected {
 		detectedSet[c.ID] = true
 	}
-	anyAction := false
-	for _, c := range detected {
-		if chosenSet[c.ID] || wasRegistered[c.ID] {
-			anyAction = true
-			break
-		}
-	}
-	if !anyAction {
-		fmt.Println("Nothing selected; no changes made.")
-		return nil
-	}
 
+	fmt.Printf("favro-mcp installer - registering server %q\n", name)
+	fmt.Printf("  command: %s\n\n", target.Command)
 	if opts.DryRun {
 		fmt.Print("Dry run - no files will be changed.\n\n")
 	}
-
-	// Iterate detected clients in canonical registry order for stable output.
-	// Diff against the prior registration snapshot:
-	//   - selected now            -> applyClient (registers, or refreshes
-	//                                path/env idempotently if already there)
-	//   - was registered, unselected -> applyRemove
-	//   - otherwise               -> skip
 	for _, c := range Clients {
 		if !detectedSet[c.ID] {
 			continue
 		}
-		switch {
-		case chosenSet[c.ID]:
-			r := applyClient(c, name, target, opts.DryRun)
-			tail := ""
-			if c.ReloadHint != "" {
-				tail = " -> " + c.ReloadHint
-			}
-			fmt.Printf("  %s: %s%s\n", c.Name, describe(r), tail)
-		case wasRegistered[c.ID]:
-			r := applyRemove(c, name, opts.DryRun)
-			fmt.Printf("  %s: %s\n", c.Name, describeRemove(r, opts.DryRun))
+		r := applyClient(c, name, target, opts.DryRun)
+		tail := ""
+		if c.ReloadHint != "" {
+			tail = " -> " + c.ReloadHint
 		}
+		fmt.Printf("  %s: %s%s\n", c.Name, describe(r), tail)
 	}
 	fmt.Println("\nDone.")
 	fmt.Println("Run `favro-mcp configure` anytime to change the toolset, clients, or re-login.")
@@ -371,24 +337,44 @@ func RunInstall(opts Options) error {
 
 // interactiveLogin prompts for email + token (hidden on a TTY) via the TUI,
 // verifies them against the Favro API, and saves them only on success. Loops
-// on failure.
+// on failure. Used by RunApp's standalone "Log in to Favro" entry (the
+// installer flow folds login into its own single-program UI instead).
 func interactiveLogin(prefillEmail string) error {
+	if !isTTY() {
+		return ErrCancelled
+	}
 	for {
-		email, token, err := promptLogin(prefillEmail)
+		p := tea.NewProgram(newLoginModel(prefillEmail))
+		out, err := p.Run()
 		if err != nil {
-			return err // includes ErrCancelled
+			return err
 		}
-		if _, err := favro.NewClient(email, token, "").GetOrganizations(); err != nil {
+		m := out.(loginModel)
+		if m.cancel {
+			return ErrCancelled
+		}
+		email := strings.TrimSpace(m.email.Value())
+		token := strings.TrimSpace(m.token.Value())
+		if email == "" || token == "" {
+			return ErrCancelled
+		}
+		if err := verifyAndSaveCreds(email, token); err != nil {
 			fmt.Printf("\nVerification failed: %v\nPlease try again.\n\n", err)
 			prefillEmail = email
 			continue
 		}
-		if err := credentials.Save(email, token); err != nil {
-			return err
-		}
 		fmt.Println("Credentials verified and saved.")
 		return nil
 	}
+}
+
+// verifyAndSaveCreds checks the credentials against the live Favro API and, on
+// success, persists them. Invalid credentials are never saved.
+func verifyAndSaveCreds(email, token string) error {
+	if _, err := favro.NewClient(email, token, "").GetOrganizations(); err != nil {
+		return err
+	}
+	return credentials.Save(email, token)
 }
 
 // RunUninstall removes this server from the MCP clients the user chooses.
@@ -521,55 +507,4 @@ func describeRemove(r ApplyResult, dryRun bool) string {
 		return "not registered (nothing to remove)"
 	}
 	return describe(r)
-}
-
-// chooseToolset decides which env var configures the server's toolset:
-//   - read / write / delete  -> FAVRO_TOOLSET=<tier>
-//   - custom                 -> FAVRO_TOOLS=<comma list of enabled tools>
-//
-// Interactive when neither --yes nor an explicit --toolset is given AND stdin
-// is a TTY. In a non-interactive context it defaults to Read + Write.
-func chooseToolset(opts Options) (map[string]string, error) {
-	switch opts.Toolset {
-	case mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete:
-		return map[string]string{"FAVRO_TOOLSET": opts.Toolset}, nil
-	case "custom":
-		if opts.Yes {
-			return nil, fmt.Errorf("--toolset=custom requires interactive selection (omit --yes)")
-		}
-		if !isTTY() {
-			return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}, nil
-		}
-		return pickCustomTools()
-	case "":
-	default:
-		return nil, fmt.Errorf("unknown --toolset %q (use read, write, delete, or custom)", opts.Toolset)
-	}
-	if opts.Yes || !isTTY() {
-		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}, nil
-	}
-	choice, err := promptToolset()
-	if err != nil {
-		// ErrCancelled on a TTY = explicit cancel; propagate so the install aborts.
-		return nil, err
-	}
-	if choice == "custom" {
-		return pickCustomTools()
-	}
-	return map[string]string{"FAVRO_TOOLSET": choice}, nil
-}
-
-// pickCustomTools shows every tool as a toggle (read+write pre-checked, delete
-// off) and returns a FAVRO_TOOLS allowlist of the selected tool names.
-func pickCustomTools() (map[string]string, error) {
-	catalog := mcpserver.ToolCatalog()
-	ids, err := promptTools(catalog)
-	if err != nil {
-		return nil, err
-	}
-	if len(ids) == 0 {
-		fmt.Println("No tools selected; defaulting to the Read + Write toolset.")
-		return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}, nil
-	}
-	return map[string]string{"FAVRO_TOOLS": strings.Join(ids, ",")}, nil
 }
