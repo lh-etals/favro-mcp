@@ -1,6 +1,7 @@
 package install
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -191,6 +192,31 @@ func TestTomlHandlesBOM(t *testing.T) {
 	got := read(t, f)
 	if !strings.Contains(got, "favro") || !strings.Contains(got, "preexisting") {
 		t.Errorf("BOM TOML not handled correctly:\n%s", got)
+	}
+}
+
+
+// OpenCode: preserve existing enabled flag on re-configure.
+func TestOpenCodePreservesEnabled(t *testing.T) {
+	dir := t.TempDir()
+	// Simulate an existing opencode.json with favro disabled.
+	orig := `{"mcp":{"favro":{"type":"local","command":["old"],"enabled":false}}}`
+	f := writeFile(t, dir, "opencode.json", orig)
+	e := target("a@b.com", "tok")
+	// Upsert with the OpenCode entry shape.
+	r, err := upsertJSONServer(f, "mcp", "favro", e, false, opencodeEntry)
+	if err != nil || r != writeOK {
+		t.Fatalf("upsert=%v err=%v", r, err)
+	}
+	// Parse and verify enabled is still false (not clobbered to true).
+	var result map[string]any
+	if err := json.Unmarshal([]byte(read(t, f)), &result); err != nil {
+		t.Fatal(err)
+	}
+	mcp := result["mcp"].(map[string]any)
+	favro := mcp["favro"].(map[string]any)
+	if favro["enabled"] != false {
+		t.Errorf("enabled should be preserved as false, got %v", favro["enabled"])
 	}
 }
 

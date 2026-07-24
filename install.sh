@@ -69,7 +69,7 @@ if [ -t 0 ] || [ -e /dev/tty ]; then
     printf '\nFavro credentials already configured (run `favro-mcp login` to change).\n'
   fi
   printf '\n=== Configuring favro-mcp (login + toolset + clients) ===\n'
-  "$TARGET" configure </dev/tty 2>/dev/null || printf '  (configure skipped or failed; run `favro-mcp configure` later)\n'
+  "$TARGET" configure </dev/tty || printf '  (configure skipped or failed; run `favro-mcp configure` later)\n'
   if [ "$on_path" -eq 0 ]; then
     printf '\nNote: favro-mcp is at %s — reopen your shell or add it to PATH first.\n' "$INSTALL_DIR"
   fi

@@ -898,7 +898,7 @@ func (s *Server) uploadAttachment(_ context.Context, _ *mcp.CallToolRequest, arg
 		return jsonResult(nil, err)
 	}
 	info, err := os.Stat(args.FilePath)
-	if err != nil || info.IsDir() {
+	if err != nil || !info.Mode().IsRegular() {
 		return jsonResult(nil, fmt.Errorf("file not found: %s", args.FilePath))
 	}
 	if info.Size() > maxAttachmentBytes {
