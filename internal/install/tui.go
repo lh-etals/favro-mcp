@@ -529,16 +529,10 @@ func (m *installModel) startApply() tea.Cmd {
 }
 
 func (m installModel) resultLine(r applyResult) string {
-	var s string
 	if r.action == "remove" {
-		s = describeRemove(r.res, m.opts.DryRun)
-	} else {
-		s = describe(r.res)
+		return describeRemove(r.res, m.opts.DryRun)
 	}
-	if r.action != "remove" && r.client.ReloadHint != "" {
-		s += " -> " + r.client.ReloadHint
-	}
-	return s
+	return describe(r.res)
 }
 
 // --- views ------------------------------------------------------------------
@@ -666,22 +660,34 @@ func (m *installModel) viewLogin() string {
 
 func (m *installModel) viewDone() string {
 	var b strings.Builder
-	b.WriteString(styleTitle.Render("favro-mcp installer"))
-	b.WriteString("\n")
 	if m.applyError != "" {
-		b.WriteString(styleErr.Render("Error: "+m.applyError) + "\n\n")
+		b.WriteString(styleErr.Render("Error: " + m.applyError) + "\n\n")
 	} else if len(m.applyResults) == 0 {
 		b.WriteString("Nothing selected; no changes made.\n\n")
 	} else {
 		if m.opts.DryRun {
 			b.WriteString(styleDim.Render("Dry run - no files were changed.") + "\n")
 		}
+		allNoop := len(m.applyResults) > 0
 		for _, r := range m.applyResults {
-			b.WriteString(fmt.Sprintf("  %s: %s\n", r.client.Name, m.resultLine(r)))
+			if r.res.Status != "noop" {
+				allNoop = false
+				break
+			}
+		}
+		if allNoop {
+			b.WriteString("All selected clients are already configured. No changes needed.\n")
+		} else {
+			for _, r := range m.applyResults {
+				b.WriteString(fmt.Sprintf("  %s: %s\n", r.client.Name, m.resultLine(r)))
+			}
 		}
 		b.WriteString("\n")
+		if !allNoop {
+			b.WriteString("Restart your AI clients for changes to take effect.\n\n")
+		}
 	}
-	b.WriteString(styleFooter.Render("Run `favro-mcp configure` anytime to change the toolset, clients, or re-login."))
+	b.WriteString(styleFooter.Render("Run favro-mcp to configure, login, or interact with Favro from the console."))
 	b.WriteString("\n" + styleFooter.Render("enter to exit"))
 	return b.String()
 }

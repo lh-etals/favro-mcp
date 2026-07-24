@@ -110,6 +110,10 @@ func applyClient(c ClientDef, name string, e ServerTarget, dryRun bool) ApplyRes
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err != nil {
+			combined := strings.ToLower(err.Error() + " " + stderr.String())
+			if strings.Contains(combined, "already exists") || strings.Contains(combined, "already configured") {
+				return ApplyResult{Status: "noop"}
+			}
 			detail := firstLine(err.Error())
 			if s := strings.TrimSpace(stderr.String()); s != "" {
 				detail = firstLine(s)
@@ -206,7 +210,7 @@ func describe(r ApplyResult) string {
 		}
 		return "registered"
 	case "noop":
-		return "already registered (no change)"
+		return "already registered"
 	case "skipped":
 		return "skipped: " + r.Detail
 	case "failed":
@@ -322,24 +326,34 @@ func runUnattended(opts Options, name, email, token string, embedCreds bool, det
 		detectedSet[c.ID] = true
 	}
 
-	fmt.Printf("favro-mcp installer - registering server %q\n", name)
-	fmt.Printf("  command: %s\n\n", target.Command)
+	fmt.Printf("Registering server %q...\n", name)
 	if opts.DryRun {
 		fmt.Print("Dry run - no files will be changed.\n\n")
 	}
+	var results []ApplyResult
 	for _, c := range Clients {
 		if !detectedSet[c.ID] {
 			continue
 		}
 		r := applyClient(c, name, target, opts.DryRun)
-		tail := ""
-		if c.ReloadHint != "" {
-			tail = " -> " + c.ReloadHint
-		}
-		fmt.Printf("  %s: %s%s\n", c.Name, describe(r), tail)
+		results = append(results, r)
+		fmt.Printf("  %s: %s\n", c.Name, describe(r))
 	}
-	fmt.Println("\nDone.")
-	fmt.Println("Run `favro-mcp configure` anytime to change the toolset, clients, or re-login.")
+	fmt.Println()
+	allNoop := len(results) > 0
+	for _, r := range results {
+		if r.Status != "noop" {
+			allNoop = false
+			break
+		}
+	}
+	if allNoop {
+		fmt.Println("All selected clients are already configured. No changes needed.")
+	} else {
+		fmt.Println("Restart your AI clients for changes to take effect.")
+	}
+	fmt.Println()
+	fmt.Println("Run favro-mcp to configure, login, or interact with Favro from the console.")
 	return nil
 }
 
@@ -495,6 +509,10 @@ func applyRemove(c ClientDef, name string, dryRun bool) ApplyResult {
 		var rerr bytes.Buffer
 		cmd.Stderr = &rerr
 		if err := cmd.Run(); err != nil {
+			combined := strings.ToLower(err.Error() + " " + rerr.String())
+			if strings.Contains(combined, "not found") || strings.Contains(combined, "no such") {
+				return ApplyResult{Status: "noop"}
+			}
 			detail := firstLine(err.Error())
 			if se := strings.TrimSpace(rerr.String()); se != "" {
 				detail = firstLine(se)
