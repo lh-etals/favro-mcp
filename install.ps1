@@ -28,6 +28,12 @@ Write-Host "  favro-mcp installer" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Downloading $Asset..."
 
+# If the old binary is still present, try to clear it so we can write fresh.
+# If it's locked (e.g. favro-mcp is running), we fall back to a temp file below.
+$tempTarget = "$Target.new"
+$usingTemp  = $false
+Remove-Item $Target -Force -ErrorAction SilentlyContinue
+
 $request = $null
 $response = $null
 $stream = $null
@@ -38,7 +44,12 @@ try {
   $response = $request.GetResponse()
   $total = [int]$response.ContentLength
   $stream = $response.GetResponseStream()
-  $fs = [System.IO.File]::Create($Target)
+  try {
+    $fs = [System.IO.File]::Create($Target)
+  } catch {
+    $fs = [System.IO.File]::Create($tempTarget)
+    $usingTemp = $true
+  }
   $buffer = New-Object byte[] 65536
   $downloaded = 0
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -77,11 +88,26 @@ try {
   Write-Host "  Download failed: $_" -ForegroundColor Red
   Write-Host "  URL: $Url" -ForegroundColor Red
   Remove-Item $Target -ErrorAction SilentlyContinue
+  Remove-Item $tempTarget -ErrorAction SilentlyContinue
   return
 } finally {
   if ($fs -ne $null) { $fs.Close() }
   if ($stream -ne $null) { $stream.Close() }
   if ($response -ne $null) { $response.Close() }
+}
+
+# If we downloaded to a temp file (old exe was locked), swap it into place.
+if ($usingTemp) {
+  Remove-Item $Target -Force -ErrorAction SilentlyContinue
+  try {
+    Move-Item $tempTarget $Target -Force
+  } catch {
+    Write-Host ""
+    Write-Host "  Could not replace favro-mcp.exe: $_" -ForegroundColor Red
+    Write-Host "  Close any running favro-mcp process and re-run the installer." -ForegroundColor Yellow
+    Remove-Item $tempTarget -ErrorAction SilentlyContinue
+    return
+  }
 }
 # Clean up a partial / zero-byte download so a later retry starts fresh.
 if (-not (Test-Path $Target) -or (Get-Item $Target).Length -eq 0) {
