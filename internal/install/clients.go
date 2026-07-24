@@ -1,7 +1,6 @@
 package install
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"runtime"
 )
@@ -89,6 +88,22 @@ func zedConfig() string {
 		return filepath.Join(a, "Zed", "settings.json")
 	}
 	return xdgConfig("zed", "settings.json")
+}
+
+// vscodeConfig returns the path to VS Code's user-scoped mcp.json. Writing
+// directly to this file avoids the Windows cmd.exe quoting bugs that break
+// `code --add-mcp '<json>'` (spaces + backslashes get mangled).
+func vscodeConfig() string {
+	if runtime.GOOS == "darwin" {
+		return appSupport("Code", "User", "mcp.json")
+	}
+	if runtime.GOOS == "windows" {
+		if a := appData(); a != "" {
+			return filepath.Join(a, "Code", "User", "mcp.json")
+		}
+		return ""
+	}
+	return xdgConfig("Code", "User", "mcp.json")
 }
 
 // --- the registry ----------------------------------------------------------
@@ -250,23 +265,22 @@ var Clients = []ClientDef{
 			return exists(home(".vscode-server")) || exists(home(".vscode", "extensions"))
 		},
 		Install: InstallKind{
-			Kind:       "command",
-			Bin:        "code",
-			resolveBin: func() string { return whichIn("code", vscodeBins()...) },
-			buildArgs: func(name string, e ServerTarget) []string {
-				entry := map[string]any{"name": name, "type": "stdio", "command": e.Command}
-				if len(e.Args) > 0 {
-					entry["args"] = e.Args
-				}
-				if len(e.Env) > 0 {
-					entry["env"] = e.Env
-				}
-				b, _ := json.Marshal(entry)
-				return []string{"--add-mcp", string(b)}
-			},
+			Kind:    "file-json",
+			pathFn:  vscodeConfig,
+			TopKey:  "servers",
+			entryFn: vscodeEntry,
 		},
 		ReloadHint: "reload the VS Code window (MCP: List Servers)",
 	},
+}
+
+// vscodeEntry builds the VS Code mcp.json server entry shape. VS Code's
+// user-scoped mcp.json requires an explicit "type": "stdio" alongside the
+// standard {command, args, env} produced by entryObject.
+func vscodeEntry(e ServerTarget) map[string]any {
+	o := entryObject(e)
+	o["type"] = "stdio"
+	return o
 }
 
 func (k InstallKind) path() string {
