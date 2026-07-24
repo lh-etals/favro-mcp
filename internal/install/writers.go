@@ -276,6 +276,7 @@ func upsertTomlServer(file, name string, e ServerTarget, dryRun bool) (WriteResu
 		if !os.IsNotExist(readErr) {
 			return "", readErr
 		}
+		raw = bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF})
 		if dryRun {
 			return writeOK, nil
 		}

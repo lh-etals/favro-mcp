@@ -252,7 +252,7 @@ func interactiveLogin(prefillEmail string) error {
 			return err
 		}
 		if !ok {
-			return fmt.Errorf("login cancelled")
+			return ErrCancelled
 		}
 		if _, err := favro.NewClient(email, token, "").GetOrganizations(); err != nil {
 			fmt.Printf("\nVerification failed: %v\nPlease try again.\n\n", err)
@@ -369,8 +369,13 @@ func applyRemove(c ClientDef, name string, dryRun bool) ApplyResult {
 		if dryRun {
 			return ApplyResult{Status: "ok", Detail: "would run: " + bin + " " + strings.Join(args, " ")}
 		}
-		if err := exec.Command(bin, args...).Run(); err != nil {
-			return ApplyResult{Status: "failed", Detail: firstLine(err.Error())}
+		cmd := exec.Command(bin, args...)
+		var rerr bytes.Buffer
+		cmd.Stderr = &rerr
+		if err := cmd.Run(); err != nil {
+			detail := firstLine(err.Error())
+			if se := strings.TrimSpace(rerr.String()); se != "" { detail = firstLine(se) }
+			return ApplyResult{Status: "failed", Detail: detail}
 		}
 		return ApplyResult{Status: "ok"}
 	}

@@ -277,7 +277,7 @@ func (m toolsetModel) View() string {
 		}
 		b.WriteString(line + "\n")
 	}
-	b.WriteString(footer("↑/↓ move · enter select · q cancel"))
+	b.WriteString(footer("up/down move · enter select · q cancel"))
 	return b.String()
 }
 
@@ -346,7 +346,9 @@ func (m toolsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor++
 		}
 	case " ":
-		m.checked[m.cursor] = !m.checked[m.cursor]
+		if len(m.checked) > 0 && m.cursor < len(m.checked) {
+			m.checked[m.cursor] = !m.checked[m.cursor]
+		}
 	case "enter":
 		return m, tea.Quit
 	}
@@ -368,7 +370,7 @@ func (m toolsModel) View() string {
 		}
 		b.WriteString(fmt.Sprintf("  %s %s %-20s %s\n", cursor, mark, n, subtleStyle.Render("("+m.tiers[i]+") "+truncate(m.descs[i], 50))))
 	}
-	b.WriteString(footer("↑/↓ move · space toggle · enter confirm · q cancel"))
+	b.WriteString(footer("up/down move · space toggle · enter confirm · q cancel"))
 	return b.String()
 }
 
@@ -453,6 +455,7 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.emailTI.Focus()
 				m.tokenTI.Blur()
 			}
+			return m, nil
 		case "enter":
 			if m.focus == 0 {
 				m.focus = 1

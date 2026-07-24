@@ -108,7 +108,7 @@ func multiSelect(prompt string, choices []choice) ([]string, error) {
 			return out, nil
 		case seq[0] == 3 || seq[0] == 'q': // ctrl-c / q
 			os.Stdout.WriteString("\r\033[K")
-			return nil, fmt.Errorf("cancelled")
+			return nil, ErrCancelled
 		}
 	}
 }

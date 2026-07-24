@@ -98,7 +98,7 @@ func (s *Server) listCards(_ context.Context, _ *mcp.CallToolRequest, args listC
 		front.Query = *args.Query
 	}
 	body := fmt.Sprintf("%d card(s) (page %d/%d).", len(rows), args.Page, totalPages)
-	if totalPages > 1 {
+	if totalPages > 1 && args.Page < totalPages-1 {
 		body += fmt.Sprintf(" Next: page=%d.", args.Page+1)
 	}
 	return textResult(rendered{front: front, body: body}.String())
