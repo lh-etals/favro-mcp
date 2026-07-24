@@ -1,37 +1,72 @@
 # Favro MCP
 
-A single-binary [MCP](https://modelcontextprotocol.io) server for
-[Favro](https://favro.com) — rewritten in Go for speed, portability, and a
-zero-dependency install.
+[![release](https://img.shields.io/github/v/release/lh-etals/favro-mcp?include_prereleases&label=release)](https://github.com/lh-etals/favro-mcp/releases)
+[![license](https://img.shields.io/github/license/lh-etals/favro-mcp)](#license)
+[![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-blue)](#what-it-does)
 
-One static **~9 MB** binary. No Python, no `uv`, no `pip`, no Node. It runs
-on Linux, macOS, and Windows (x64 + arm64), **auto-detects which AI clients you
-have installed**, and registers itself with the ones you pick.
+Give any AI agent full control of your [Favro](https://favro.com) boards, cards,
+columns, tags, and tasks through **32 MCP tools** - with a universal one-command
+installer, built-in client detection, and tiered toolset control.
 
-- **32 MCP tools** across Organizations, Collections, Boards, Cards, Tags,
-  Users, Columns, and Lanes
-- **Universal one-command installers** — `curl | sh` on macOS/Linux,
-  `irm | iex` on Windows
-- **Auto-registers** with Claude Desktop, Claude Code, Cursor, Codex, Gemini
-  CLI, Windsurf, Zed, Cline, Roo Code, Amazon Q, Continue, OpenCode, and VS Code
-- **Secure by design** — your Favro token lives in your local client config and
-  talks straight to the Favro API. No proxy, no third-party service.
+macOS / Linux:
 
-A Go port of [truls27a/favro-mcp](https://github.com/truls27a/favro-mcp)
-(same 32 tools, same Favro API). Maintained by [Etals](https://etals.com).
+```bash
+curl -fsSL https://github.com/lh-etals/favro-mcp/raw/main/install.sh | sh
+```
 
----
+Windows (PowerShell):
+
+```powershell
+irm https://github.com/lh-etals/favro-mcp/raw/main/install.ps1 | iex
+```
+
+The installer downloads the right binary for your OS/arch, puts `favro-mcp` on
+your `PATH`, then opens an interactive configurer: it detects your AI clients,
+lets you toggle which ones to wire up with the arrow keys, pick a toolset
+(read / write / delete / custom), and signs you in. Run `favro-mcp configure`
+anytime to change what's connected.
+
+## What it does
+
+- **32 tools across read / write / delete tiers** - Organizations, Collections,
+  Boards, Cards, Tags, Users, Columns, and Lanes.
+- **Detects 13 AI clients** - Claude Desktop, Claude Code, Cursor, Codex,
+  Gemini CLI, Windsurf, Zed, Cline, Roo Code, Amazon Q, Continue, OpenCode, and
+  VS Code - and registers itself with the ones you pick.
+- **Single static binary** - one ~10 MB Go binary, CGO-free, no Python, no Node,
+  no runtime deps. Runs on Linux, macOS, Windows (x64 + arm64).
+- **Toolset control** - expose `read`, `read+write`, `read+write+delete`, or a
+  **custom** per-tool selection. Set once at install time.
+- **YAML frontmatter + Markdown output** - every tool result is structured and
+  human-readable, so the agent (and you) can scan it at a glance.
+- **Credentials stored securely** - your Favro token lives in a mode-`0600`
+  file under `~/.favro-mcp`, talks straight to the Favro API. No proxy, no
+  third-party service.
+
+## Other Favro-MCP builds
+
+| | Python (`truls27a/favro-mcp`) | Go (`lh-etals/favro-mcp`) |
+|---|---|---|
+| **Install** | `uvx favro-mcp` (requires Python + uv) | `curl \| sh` or `irm \| iex` (single binary, no runtime deps) |
+| **Runtime** | Python interpreter + fastmcp + httpx + pydantic | Single ~10 MB static binary (Go, CGO-free) |
+| **Management & configuration** | Manual JSON/TOML editing per client | Interactive TUI installer: detects 13 clients, arrow-key toggle, toolset tiers (read/write/delete/custom), `favro-mcp login` with API verification, `favro-mcp configure` to reconfigure, `favro-mcp uninstall` |
+| **Tools** | 28 tools | 32 tools (adds `delete_comment`, `delete_task`, `delete_tasklist`, `remove_attachment`) |
+| **Output format** | JSON | YAML frontmatter + Markdown (structured + human-readable) |
+
+Full credit to [truls27a/favro-mcp](https://github.com/truls27a/favro-mcp) - this
+repo forked from it, kept API parity, and added the Go runtime, installer, and
+management layer.
 
 ## Install
 
-**macOS / Linux** — downloads the matching binary to `~/.favro-mcp/bin` and
+**macOS / Linux** - downloads the matching binary to `~/.favro-mcp/bin` and
 adds it to your `PATH`:
 
 ```bash
 curl -fsSL https://github.com/lh-etals/favro-mcp/raw/main/install.sh | sh
 ```
 
-**Windows (PowerShell)** — downloads to `%LOCALAPPDATA%\favro-mcp` and adds it
+**Windows (PowerShell)** - downloads to `%LOCALAPPDATA%\favro-mcp` and adds it
 to your user `PATH`:
 
 ```powershell
@@ -46,9 +81,9 @@ terminal** afterward so `favro-mcp` is found.
 ### Get your Favro API token
 
 1. Log in to [Favro](https://favro.com)
-2. Click your **username** (top-left) → **My Profile**
-3. Go to **API Tokens** → **Create new token**
-4. **Copy the token** — you won't see it again.
+2. Click your **username** (top-left) -> **My Profile**
+3. Go to **API Tokens** -> **Create new token**
+4. **Copy the token** - you won't see it again.
 
 ### Log in
 
@@ -62,7 +97,7 @@ verifies them against the Favro API. The server reads this file at startup, so
 your credentials live in one place instead of being copied into every client
 config. You only do this once.
 
-> Don't want a credential file? See **Manual configuration** below — you can put
+> Don't want a credential file? See **Manual configuration** below - you can put
 > `FAVRO_EMAIL`/`FAVRO_API_TOKEN` straight in a client's `env` block and skip
 > `login` entirely; the server honours those env vars (they take precedence over
 > the stored credentials).
@@ -77,9 +112,8 @@ This scans your machine for MCP-capable clients (Claude Desktop, Claude Code,
 Cursor, Codex, Gemini CLI, Windsurf, Zed, Cline, Roo Code, Amazon Q, Continue,
 OpenCode, VS Code), and lets you pick which to wire up with an interactive
 checklist. Only detected clients are selectable; press `v` to reveal the rest.
-Each client's
-config is written **safely and idempotently** — your other servers are
-preserved, and re-running won't duplicate anything. The one-line installer
+Each client's config is written **safely and idempotently** - your other servers
+are preserved, and re-running won't duplicate anything. The one-line installer
 above runs `login` then `install` for you automatically.
 
 Flags:
@@ -100,12 +134,12 @@ Remove it everywhere later with `favro-mcp uninstall`.
 `install` asks which tools the server should expose (set permanently via
 `FAVRO_TOOLSET` / `FAVRO_TOOLS` in each client's config):
 
-- **Read-only** — list/get only. Cannot change anything. Safest for giving an
+- **Read-only** - list/get only. Cannot change anything. Safest for giving an
   agent read access to your boards.
-- **Read + Write** *(default)* — also create/update/move cards, columns, tags,
+- **Read + Write** *(default)* - also create/update/move cards, columns, tags,
   comments, attachments. No deletes.
-- **Read + Write + Delete** — full access, including deletes.
-- **Custom** — a toggle view of every individual tool; pick exactly which ones
+- **Read + Write + Delete** - full access, including deletes.
+- **Custom** - a toggle view of every individual tool; pick exactly which ones
   the agent may call.
 
 ### Manual configuration
@@ -129,29 +163,8 @@ stored login):
 ```
 
 Credential resolution order: **`env` block (or `FAVRO_EMAIL`/`FAVRO_API_TOKEN`
-environment variables) → `favro-mcp login` store**. If neither is present the
+environment variables) -> `favro-mcp login` store**. If neither is present the
 server returns a clear error on first use.
-
----
-
-## Favro MCP distributions
-
-There's more than one way to run Favro from an AI agent. Here are the known
-MCP distributions for Favro:
-
-- **This repo — `lh-etals/favro-mcp` (Go).**
-  A single static binary (~9 MB) with a universal `curl | sh` / `irm | iex`
-  installer and built-in auto-detection of 13 AI clients. 32 tools across
-  read / write / delete tiers (plus per-tool custom). No runtime dependencies.
-  [github.com/lh-etals/favro-mcp](https://github.com/lh-etals/favro-mcp) ·
-  [releases](https://github.com/lh-etals/favro-mcp/releases)
-- **`truls27a/favro-mcp` (Python).**
-  The original Favro MCP server, installed via `uv`/`pip` (`uvx favro-mcp`).
-  This Go repo forked from it, kept feature parity with the same Favro API
-  surface, and rewrote the server in Go with an installer on top.
-  [github.com/truls27a/favro-mcp](https://github.com/truls27a/favro-mcp)
-
----
 
 ## Tools
 
@@ -222,11 +235,9 @@ wherever a Favro object is referenced.
 | --- | --- |
 | `list_lanes` | List a board's lanes (swimlanes) |
 
-Lanes are read-only in the Favro API — they can't be created, renamed, or
+Lanes are read-only in the Favro API - they can't be created, renamed, or
 deleted. To place a card in a lane, pass the lane ID or name as the `lane`
 argument to `create_card`, `update_card`, or `move_card`.
-
----
 
 ## Build from source
 
@@ -250,9 +261,7 @@ done
 Releases are produced by the `release` workflow on tag push
 (`git tag v0.x && git push --tags`).
 
----
-
 ## License
 
-MIT. Based on [truls27a/favro-mcp](https://github.com/truls27a/favro-mcp) by
-Truls Borgvall. Maintained by [Etals](https://etals.com).
+MIT. Based on [truls27a/favro-mcp](https://github.com/truls27a/favro-mcp).
+Maintained by [Etals](https://etals.com).
