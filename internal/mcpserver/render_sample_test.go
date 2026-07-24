@@ -42,6 +42,6 @@ func TestSampleFormats(t *testing.T) {
 	}))
 
 	// error (not_found via resolver)
-	ec := errorResult(&notFoundError{entityType: "card", identifier: "zzz-nonexistent"}).Content[0].(*mcp.TextContent)
+	ec := errorResult(newNotFoundError("card", "zzz-nonexistent")).Content[0].(*mcp.TextContent)
 	t.Log("=== error (not_found) ===\n" + ec.Text)
 }

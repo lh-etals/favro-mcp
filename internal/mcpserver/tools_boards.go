@@ -57,7 +57,7 @@ func (s *Server) listBoards(_ context.Context, _ *mcp.CallToolRequest, args list
 			}
 		}
 		if collectionID == "" {
-			return jsonResult(nil, &notFoundError{entityType: "collection", identifier: *args.Collection})
+			return jsonResult(nil, newNotFoundError("collection", *args.Collection))
 		}
 	}
 	boards, err := client.GetWidgets(collectionID, false)
