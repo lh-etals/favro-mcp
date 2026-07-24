@@ -8,7 +8,7 @@ One static **~9 MB** binary. No Python, no `uv`, no `pip`, no Node. It runs
 on Linux, macOS, and Windows (x64 + arm64), **auto-detects which AI clients you
 have installed**, and registers itself with the ones you pick.
 
-- **28 MCP tools** across Organizations, Collections, Boards, Cards, Tags,
+- **32 MCP tools** across Organizations, Collections, Boards, Cards, Tags,
   Users, Columns, and Lanes
 - **Universal one-command installers** — `curl | sh` on macOS/Linux,
   `irm | iex` on Windows
@@ -18,7 +18,7 @@ have installed**, and registers itself with the ones you pick.
   talks straight to the Favro API. No proxy, no third-party service.
 
 A Go port of [truls27a/favro-mcp](https://github.com/truls27a/favro-mcp)
-(same 28 tools, same Favro API). Maintained by [Etals](https://etals.com).
+(same 32 tools, same Favro API). Maintained by [Etals](https://etals.com).
 
 ---
 
@@ -155,7 +155,7 @@ MCP distributions for Favro:
 
 ## Tools
 
-All **28 tools** use the Favro REST API. IDs, names, or emails are accepted
+All **32 tools** use the Favro REST API. IDs, names, or emails are accepted
 wherever a Favro object is referenced.
 
 ### Organizations
@@ -190,7 +190,11 @@ wherever a Favro object is referenced.
 | `assign_card` | Assign / unassign a user (by ID, name, or email) |
 | `tag_card` | Add / remove a tag (by ID or name) |
 | `add_comment` | Add a comment to a card |
+| `delete_comment` | Delete a comment by ID |
 | `upload_attachment` | Upload a file attachment (max 10 MB) to a card |
+| `remove_attachment` | Remove a file attachment from a card |
+| `delete_task` | Delete a task (checklist item) by ID |
+| `delete_tasklist` | Delete a task list (checklist) by ID |
 | `list_custom_fields` | List custom-field definitions for `update_card` |
 
 ### Tags
