@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"errors"
-	"strconv"
 
 	"github.com/lh-etals/favro-mcp/internal/favro"
 )
@@ -16,8 +15,6 @@ func strOr(p *string) string {
 	}
 	return *p
 }
-
-func itoa(n int) string { return strconv.Itoa(n) }
 
 // client builds a Favro client from env + active org.
 func (s *Server) client() (*favro.Client, error) {

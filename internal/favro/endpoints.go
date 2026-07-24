@@ -147,13 +147,13 @@ func (c *Client) DeleteColumn(columnID string) error {
 // Cards ---------------------------------------------------------------------
 
 type CardFilter struct {
-	WidgetCommonID    string
-	CollectionID      string
-	ColumnID          string
-	CardSequentialID  *int
-	TodoList          bool
-	Unique            bool
-	Archived          *bool
+	WidgetCommonID   string
+	CollectionID     string
+	ColumnID         string
+	CardSequentialID *int
+	TodoList         bool
+	Unique           bool
+	Archived         *bool
 }
 
 func (f CardFilter) params() url.Values {
@@ -299,23 +299,23 @@ func (c *Client) CreateCard(o CreateCardOpts) (*Card, error) {
 }
 
 type UpdateCardOpts struct {
-	CardID            string
-	Name              *string
+	CardID              string
+	Name                *string
 	DetailedDescription *string
-	WidgetCommonID    *string
-	ColumnID          *string
-	LaneID            *string
-	DragMode          *string
-	AddTags           []string
-	RemoveTags        []string
-	StartDate         *string
-	DueDate           *string
-	AddAssignments    []string
-	RemoveAssignments []string
-	Archived          *bool
-	ListPosition      *float64
-	CustomFields      []map[string]any
-	RemoveAttachments []string // fileURLs to detach (PUT /cards/{id} removeAttachments)
+	WidgetCommonID      *string
+	ColumnID            *string
+	LaneID              *string
+	DragMode            *string
+	AddTags             []string
+	RemoveTags          []string
+	StartDate           *string
+	DueDate             *string
+	AddAssignments      []string
+	RemoveAssignments   []string
+	Archived            *bool
+	ListPosition        *float64
+	CustomFields        []map[string]any
+	RemoveAttachments   []string // fileURLs to detach (PUT /cards/{id} removeAttachments)
 }
 
 func (c *Client) UpdateCard(o UpdateCardOpts) (*Card, error) {

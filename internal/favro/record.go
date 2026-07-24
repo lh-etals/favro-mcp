@@ -28,8 +28,8 @@ func recordExchange(method, url string, reqBody []byte, status int, respBody []b
 	if err != nil {
 		return
 	}
-	_ = os.MkdirAll(dir, 0o755)
-	_ = os.WriteFile(filepath.Join(dir, fmt.Sprintf("%03d_%s.json", seq, method)), b, 0o644)
+	_ = os.MkdirAll(dir, 0o700)
+	_ = os.WriteFile(filepath.Join(dir, fmt.Sprintf("%03d_%s.json", seq, method)), b, 0o600)
 }
 
 // bodyOrText parses JSON bodies (so fixtures are diffable), returns nil for

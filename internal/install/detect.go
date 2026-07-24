@@ -78,7 +78,10 @@ func whichIn(bin string, dirs ...string) string {
 	if p := which(bin); p != "" {
 		return p
 	}
-	exts := []string{"", ".exe", ".cmd", ".bat"}
+	exts := []string{""}
+	if runtime.GOOS == "windows" {
+		exts = append(exts, ".exe", ".cmd", ".bat")
+	}
 	for _, d := range dirs {
 		for _, ext := range exts {
 			if p := filepath.Join(d, bin+ext); exists(p) {

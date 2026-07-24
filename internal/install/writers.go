@@ -18,8 +18,8 @@ import (
 type WriteResult string
 
 const (
-	writeOK                WriteResult = "ok"
-	writeNoop              WriteResult = "noop"
+	writeOK                 WriteResult = "ok"
+	writeNoop               WriteResult = "noop"
 	writeSkippedUnparseable WriteResult = "skipped-unparseable"
 )
 
@@ -171,6 +171,15 @@ func upsertJSONServer(file, topKey, name string, e ServerTarget, dryRun bool, en
 		entryFn = entryObject
 	}
 	obj := entryFn(e)
+	// Preserve an existing "enabled" flag for custom entry shapes (e.g. OpenCode)
+	// so re-running install does not re-enable a server the user disabled.
+	if _, hasEnabled := obj["enabled"]; hasEnabled {
+		if prev, ok := servers[name].(map[string]any); ok {
+			if v, ok := prev["enabled"]; ok {
+				obj["enabled"] = v
+			}
+		}
+	}
 	if !fresh && entryEquals(servers[name], obj) {
 		return writeNoop, nil
 	}

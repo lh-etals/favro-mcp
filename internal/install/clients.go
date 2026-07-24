@@ -15,13 +15,13 @@ type ServerTarget struct {
 
 // InstallKind describes how a client's config is written.
 type InstallKind struct {
-	Kind     string // "file-json" | "file-toml" | "file-yaml-list" | "command"
-	pathFn   func() string
-	TopKey   string // for file-json
-	entryFn  func(ServerTarget) map[string]any // custom file-json entry shape (nil = default)
-	Bin      string
+	Kind       string // "file-json" | "file-toml" | "file-yaml-list" | "command"
+	pathFn     func() string
+	TopKey     string                            // for file-json
+	entryFn    func(ServerTarget) map[string]any // custom file-json entry shape (nil = default)
+	Bin        string
 	resolveBin func() string // full path to the CLI (PATH + install dirs); falls back to Bin
-	buildArgs func(name string, e ServerTarget) []string
+	buildArgs  func(name string, e ServerTarget) []string
 	removeArgs func(name string) []string
 }
 
@@ -50,14 +50,14 @@ func claudeDesktopConfig() string {
 	return "" // no official Linux build
 }
 
-func cursorConfig() string      { return home(".cursor", "mcp.json") }
-func codexConfig() string       { return home(".codex", "config.toml") }
-func geminiConfig() string      { return home(".gemini", "settings.json") }
-func windsurfConfig() string    { return home(".codeium", "windsurf", "mcp_config.json") }
-func clineConfig() string       { return home(".cline", "data", "settings", "cline_mcp_settings.json") }
+func cursorConfig() string   { return home(".cursor", "mcp.json") }
+func codexConfig() string    { return home(".codex", "config.toml") }
+func geminiConfig() string   { return home(".gemini", "settings.json") }
+func windsurfConfig() string { return home(".codeium", "windsurf", "mcp_config.json") }
+func clineConfig() string    { return home(".cline", "data", "settings", "cline_mcp_settings.json") }
 
-func amazonQConfig() string   { return home(".aws", "amazonq", "mcp.json") }
-func opencodeConfig() string  { return xdgConfig("opencode", "opencode.json") }
+func amazonQConfig() string  { return home(".aws", "amazonq", "mcp.json") }
+func opencodeConfig() string { return xdgConfig("opencode", "opencode.json") }
 func continueConfig() string { return home(".continue", "config.yaml") }
 
 func rooConfig() string {
@@ -236,10 +236,18 @@ var Clients = []ClientDef{
 		ID:   "vscode",
 		Name: "VS Code",
 		Detect: func() bool {
-			return whichIn("code", vscodeBins()...) != "" ||
-				appBundle("Visual Studio Code.app") ||
-				appBundle("Visual Studio Code - Insiders.app") ||
-				hasVscodeExt("ms-vscode.cpptools") // VS Code family present if any ext dir exists-ish
+			if whichIn("code", vscodeBins()...) != "" {
+				return true
+			}
+			if appBundle("Visual Studio Code.app") || appBundle("Visual Studio Code - Insiders.app") {
+				return true
+			}
+			// Windows install
+			if a := localAppData(); a != "" && exists(filepath.Join(a, "Programs", "Microsoft VS Code", "Code.exe")) {
+				return true
+			}
+			// VS Code Server (Linux remote) or local extensions dir
+			return exists(home(".vscode-server")) || exists(home(".vscode", "extensions"))
 		},
 		Install: InstallKind{
 			Kind:       "command",

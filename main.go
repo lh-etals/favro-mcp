@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -114,6 +115,10 @@ func runInstaller(uninstall bool, args []string) {
 		err = install.RunInstall(opts)
 	}
 	if err != nil {
+		if errors.Is(err, install.ErrCancelled) {
+			fmt.Println("Cancelled; no changes made.")
+			return
+		}
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

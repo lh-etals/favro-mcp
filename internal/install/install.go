@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -95,10 +96,14 @@ func applyClient(c ClientDef, name string, e ServerTarget, dryRun bool) ApplyRes
 			return ApplyResult{Status: "ok", Detail: "would run: " + bin + " " + strings.Join(args, " ")}
 		}
 		cmd := exec.Command(bin, args...)
-		cmd.Stdout = nil
-		cmd.Stderr = nil
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
 		if err := cmd.Run(); err != nil {
-			return ApplyResult{Status: "failed", Detail: firstLine(err.Error())}
+			detail := firstLine(err.Error())
+			if s := strings.TrimSpace(stderr.String()); s != "" {
+				detail = firstLine(s)
+			}
+			return ApplyResult{Status: "failed", Detail: detail}
 		}
 		return ApplyResult{Status: "ok"}
 	}

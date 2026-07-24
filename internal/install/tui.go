@@ -2,6 +2,7 @@ package install
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -17,13 +18,13 @@ import (
 // Styling ---------------------------------------------------------------------
 
 var (
-	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
-	subtleStyle  = lipgloss.NewStyle().Faint(true)
-	cursorStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("213")).Bold(true)
-	checkStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("36"))
-	greyStyle    = lipgloss.NewStyle().Faint(true)
-	detectedTag  = subtleStyle.Render("(detected)")
-	footerStyle  = lipgloss.NewStyle().Faint(true).MarginTop(1)
+	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
+	subtleStyle = lipgloss.NewStyle().Faint(true)
+	cursorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("213")).Bold(true)
+	checkStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("36"))
+	greyStyle   = lipgloss.NewStyle().Faint(true)
+	detectedTag = subtleStyle.Render("(detected)")
+	footerStyle = lipgloss.NewStyle().Faint(true).MarginTop(1)
 )
 
 func footer(shortcuts string) string {
@@ -41,10 +42,10 @@ type clientItem struct {
 }
 
 type clientsModel struct {
-	items    []clientItem
-	cursor   int // index into selectable (detected) items
-	checked  map[string]bool
-	showAll  bool
+	items     []clientItem
+	cursor    int // index into selectable (detected) items
+	checked   map[string]bool
+	showAll   bool
 	cancelled bool
 }
 
@@ -84,29 +85,12 @@ func (m clientsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up", "k":
 			sel := m.selectable()
 			if len(sel) > 0 {
-				// find current position among selectable, move up
-				curIdx := -1
-				for i, idx := range sel {
-					if idx == sel[m.cursor%len(sel)] {
-						curIdx = i
-						break
-					}
-				}
-				if curIdx < 0 {
-					curIdx = 0
-				}
-				if curIdx > 0 {
-					curIdx--
-				}
-				m.cursor = curIdx
+				m.cursor = (m.cursor - 1 + len(sel)) % len(sel)
 			}
 		case "down", "j":
 			sel := m.selectable()
 			if len(sel) > 0 {
-				n := len(sel)
-				curIdx := m.cursor % n
-				curIdx = (curIdx + 1) % n
-				m.cursor = curIdx
+				m.cursor = (m.cursor + 1) % len(sel)
 			}
 		case " ":
 			sel := m.selectable()
@@ -133,12 +117,19 @@ func (m clientsModel) View() string {
 	if len(sel) > 0 {
 		curIdx = sel[m.cursor%len(sel)]
 	}
-	renderedDetected := map[int]bool{}
+	othersCount := 0
 	for i, it := range m.items {
+		if !it.detected {
+			othersCount++
+		}
 		if !it.detected && !m.showAll {
 			continue
 		}
-		// cursor only on the current detected item
+		if !it.detected {
+			// non-detected: greyed, not selectable
+			b.WriteString(greyStyle.Render("      "+it.def.Name+" (not detected)") + "\n")
+			continue
+		}
 		cursor := " "
 		if i == curIdx {
 			cursor = cursorStyle.Render(">")
@@ -147,23 +138,12 @@ func (m clientsModel) View() string {
 		if m.checked[it.def.ID] {
 			mark = checkStyle.Render("[x]")
 		}
-		line := fmt.Sprintf("  %s %s %s", cursor, mark, it.def.Name)
-		if it.detected {
-			line += " " + detectedTag
-		} else {
-			// non-detected: greyed, not selectable
-			line = greyStyle.Render("    " + it.def.Name + " " + subtleStyle.Render("(not detected)"))
-			b.WriteString(line + "\n")
-			continue
-		}
-		renderedDetected[i] = true
-		b.WriteString(line + "\n")
+		b.WriteString(fmt.Sprintf("  %s %s %s %s\n", cursor, mark, it.def.Name, detectedTag))
 	}
-	if !m.showAll {
-		b.WriteString(subtleStyle.Render("    + other clients not detected (press v to show)") + "\n")
+	if !m.showAll && othersCount > 0 {
+		b.WriteString(subtleStyle.Render(fmt.Sprintf("    + %d other client(s) not detected (press v to show)", othersCount)) + "\n")
 	}
-	hint := "↑/↓ move · space toggle · v show all · enter confirm · q cancel"
-	b.WriteString(footer(hint))
+	b.WriteString(footer("up/down move · space toggle · v show all · enter confirm · q cancel"))
 	return b.String()
 }
 
@@ -178,8 +158,12 @@ func (m clientsModel) selectedIDs() []string {
 	return out
 }
 
+// ErrCancelled is returned by the TUI when the user aborts; callers treat it as
+// a clean exit (no changes), not an error.
+var ErrCancelled = errors.New("cancelled")
+
 // runClientsTUI runs the client multi-select. Falls back to a numbered prompt
-// when stdin is not a TTY.
+// when stdin is not a TTY. Returns ErrCancelled on abort.
 func runClientsTUI(detected, others []ClientDef) ([]string, error) {
 	if !isTTY() {
 		return fallbackClientsSelect(detected, others), nil
@@ -192,14 +176,15 @@ func runClientsTUI(detected, others []ClientDef) ([]string, error) {
 	}
 	cm := res.(clientsModel)
 	if cm.cancelled {
-		return nil, fmt.Errorf("cancelled")
+		return nil, ErrCancelled
 	}
 	return cm.selectedIDs(), nil
 }
 
-// fallbackClientsSelect: numbered prompt for non-TTY (detected pre-selected).
+// fallbackClientsSelect: numbered prompt for non-TTY. Only DETECTED clients are
+// selectable (matching the TUI behaviour); others are listed greyed.
 func fallbackClientsSelect(detected, others []ClientDef) []string {
-	fmt.Println("Select clients to register with (detected marked *):")
+	fmt.Println("Select clients to register with (enter comma-separated numbers; blank = keep * rows):")
 	idx := 0
 	idByNum := map[int]string{}
 	for _, c := range detected {
@@ -208,11 +193,8 @@ func fallbackClientsSelect(detected, others []ClientDef) []string {
 		fmt.Printf("  * %d. %s\n", idx, c.Name)
 	}
 	for _, c := range others {
-		idx++
-		idByNum[idx] = c.ID
-		fmt.Printf("    %d. %s\n", idx, c.Name)
+		fmt.Printf("    - %s (not detected, not selectable)\n", c.Name)
 	}
-	fmt.Print("Enter comma-separated numbers (blank = keep * rows): ")
 	line := readLine()
 	if strings.TrimSpace(line) == "" {
 		var out []string
@@ -251,7 +233,9 @@ var toolsetDescs = []string{
 }
 var toolsetVals = []string{mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete, "custom"}
 
-func newToolsetModel() toolsetModel { return toolsetModel{choices: toolsetChoices, descs: toolsetDescs, cursor: 1} }
+func newToolsetModel() toolsetModel {
+	return toolsetModel{choices: toolsetChoices, descs: toolsetDescs, cursor: 1}
+}
 
 func (m toolsetModel) Init() tea.Cmd { return nil }
 
@@ -311,7 +295,7 @@ func runToolsetTUI() (string, error) {
 	}
 	mm := res.(toolsetModel)
 	if mm.cancelled {
-		return "", fmt.Errorf("cancelled")
+		return "", ErrCancelled
 	}
 	return toolsetVals[mm.cursor], nil
 }
@@ -410,7 +394,7 @@ func runToolsTUI(catalog []mcpserver.ToolInfo) ([]string, error) {
 	}
 	mm := res.(toolsModel)
 	if mm.cancelled {
-		return nil, fmt.Errorf("cancelled")
+		return nil, ErrCancelled
 	}
 	return mm.selected(), nil
 }
@@ -427,9 +411,9 @@ func fallbackToolsSelect(catalog []mcpserver.ToolInfo) []string {
 // --- login inputs ------------------------------------------------------------
 
 type loginModel struct {
-	emailTI  textinput.Model
-	tokenTI  textinput.Model
-	focus    int // 0=email, 1=token
+	emailTI   textinput.Model
+	tokenTI   textinput.Model
+	focus     int // 0=email, 1=token
 	cancelled bool
 }
 
@@ -504,10 +488,20 @@ func runLoginTUI(prefillEmail string) (email, token string, ok bool, err error) 
 	if !isTTY() {
 		r := bufio.NewReader(os.Stdin)
 		fmt.Print("Favro email: ")
-		e, _ := r.ReadString('\n')
+		e, err := r.ReadString('\n')
+		if err != nil {
+			return "", "", false, nil
+		}
 		fmt.Print("Favro API token: ")
-		t, _ := r.ReadString('\n')
-		return strings.TrimSpace(e), strings.TrimSpace(t), true, nil
+		t, err := r.ReadString('\n')
+		if err != nil {
+			return "", "", false, nil
+		}
+		e, t = strings.TrimSpace(e), strings.TrimSpace(t)
+		if e == "" || t == "" {
+			return "", "", false, nil
+		}
+		return e, t, true, nil
 	}
 	m := newLoginModel(prefillEmail)
 	p := tea.NewProgram(m, tea.WithAltScreen())

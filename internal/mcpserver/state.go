@@ -53,10 +53,10 @@ func NewSession() *Session {
 }
 
 // Delegating accessors keep tool code readable.
-func (s *Session) Org() string              { return s.state.Org() }
-func (s *Session) SetOrg(id string)         { s.state.SetOrg(id) }
-func (s *Session) Board() string            { return s.state.Board() }
-func (s *Session) SetBoard(id string)       { s.state.SetBoard(id) }
+func (s *Session) Org() string        { return s.state.Org() }
+func (s *Session) SetOrg(id string)   { s.state.SetOrg(id) }
+func (s *Session) Board() string      { return s.state.Board() }
+func (s *Session) SetBoard(id string) { s.state.SetBoard(id) }
 func (s *Session) effectiveBoard(board string) string {
 	if board != "" {
 		return board

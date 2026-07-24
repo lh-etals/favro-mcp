@@ -49,8 +49,8 @@ func cardBody() any {
 	return map[string]any{
 		"cardId": "c1", "cardCommonId": "cc1", "sequentialId": 42, "name": "Fix login",
 		"widgetCommonId": "b1", "columnId": "col1",
-		"assignments":            []any{map[string]any{"userId": "u1"}},
-		"detailedDescription":    "steps to reproduce",
+		"assignments":         []any{map[string]any{"userId": "u1"}},
+		"detailedDescription": "steps to reproduce",
 	}
 }
 

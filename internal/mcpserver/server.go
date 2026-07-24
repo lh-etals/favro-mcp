@@ -40,8 +40,8 @@ func normalizeToolset(v string) string {
 
 // Server holds session state and the selected toolset, and registers tools.
 type Server struct {
-	session  *Session
-	toolset  string          // used when allowlist is empty
+	session   *Session
+	toolset   string          // used when allowlist is empty
 	allowlist map[string]bool // non-empty => custom tool selection (FAVRO_TOOLS)
 }
 

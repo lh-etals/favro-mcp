@@ -514,16 +514,16 @@ type addTaskSpec struct {
 }
 
 type updateCardArgs struct {
-	Card         string              `json:"card" jsonschema:"Card ID, sequential ID (#123), or name"`
-	Board        *string             `json:"board,omitempty" jsonschema:"Board ID or name (needed for sequential ID or name lookup)"`
-	Name         *string             `json:"name,omitempty" jsonschema:"New card name"`
-	Description  *string             `json:"description,omitempty" jsonschema:"New detailed description (Favro supports a subset of Markdown)"`
-	Lane         *string             `json:"lane,omitempty" jsonschema:"Lane (swimlane) ID or name to move the card into"`
-	Archived     *bool               `json:"archived,omitempty" jsonschema:"Archive or unarchive the card"`
-	CustomFields *[]map[string]any   `json:"custom_fields,omitempty" jsonschema:"List of custom field updates, each with customFieldId and a value field"`
-	Tasks        *[]taskUpdateSpec   `json:"tasks,omitempty" jsonschema:"List of task updates, each with task_id and optionally name/completed"`
-	AddTasklist  *string             `json:"add_tasklist,omitempty" jsonschema:"Create a new checklist (task list) on this card with this name"`
-	AddTask      *addTaskSpec        `json:"add_task,omitempty" jsonschema:"Add a task to an existing tasklist: {tasklist_id, name}"`
+	Card         string            `json:"card" jsonschema:"Card ID, sequential ID (#123), or name"`
+	Board        *string           `json:"board,omitempty" jsonschema:"Board ID or name (needed for sequential ID or name lookup)"`
+	Name         *string           `json:"name,omitempty" jsonschema:"New card name"`
+	Description  *string           `json:"description,omitempty" jsonschema:"New detailed description (Favro supports a subset of Markdown)"`
+	Lane         *string           `json:"lane,omitempty" jsonschema:"Lane (swimlane) ID or name to move the card into"`
+	Archived     *bool             `json:"archived,omitempty" jsonschema:"Archive or unarchive the card"`
+	CustomFields *[]map[string]any `json:"custom_fields,omitempty" jsonschema:"List of custom field updates, each with customFieldId and a value field"`
+	Tasks        *[]taskUpdateSpec `json:"tasks,omitempty" jsonschema:"List of task updates, each with task_id and optionally name/completed"`
+	AddTasklist  *string           `json:"add_tasklist,omitempty" jsonschema:"Create a new checklist (task list) on this card with this name"`
+	AddTask      *addTaskSpec      `json:"add_task,omitempty" jsonschema:"Add a task to an existing tasklist: {tasklist_id, name}"`
 }
 
 func (s *Server) updateCard(_ context.Context, _ *mcp.CallToolRequest, args updateCardArgs) (*mcp.CallToolResult, any, error) {
@@ -856,9 +856,9 @@ func (s *Server) tagCard(_ context.Context, _ *mcp.CallToolRequest, args tagCard
 // --- delete_card -----------------------------------------------------------
 
 type deleteCardArgs struct {
-	Card      string  `json:"card" jsonschema:"Card ID, sequential ID (#123), or name"`
-	Board     *string `json:"board,omitempty" jsonschema:"Board ID or name (needed for name lookups)"`
-	Everywhere bool   `json:"everywhere,omitempty" jsonschema:"If true, delete from all boards (not just current)"`
+	Card       string  `json:"card" jsonschema:"Card ID, sequential ID (#123), or name"`
+	Board      *string `json:"board,omitempty" jsonschema:"Board ID or name (needed for name lookups)"`
+	Everywhere bool    `json:"everywhere,omitempty" jsonschema:"If true, delete from all boards (not just current)"`
 }
 
 func (s *Server) deleteCard(_ context.Context, _ *mcp.CallToolRequest, args deleteCardArgs) (*mcp.CallToolResult, any, error) {
