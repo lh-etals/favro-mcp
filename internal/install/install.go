@@ -57,7 +57,7 @@ func applyClient(c ClientDef, name string, e ServerTarget, dryRun bool) ApplyRes
 		if file == "" {
 			return ApplyResult{Status: "skipped", Detail: "not supported on this platform"}
 		}
-		r, err := upsertJSONServer(file, inst.TopKey, name, e, dryRun)
+		r, err := upsertJSONServer(file, inst.TopKey, name, e, dryRun, inst.entryFn)
 		if err != nil {
 			return ApplyResult{Status: "failed", Detail: err.Error()}
 		}
@@ -84,10 +84,16 @@ func applyClient(c ClientDef, name string, e ServerTarget, dryRun bool) ApplyRes
 		return mapWrite(r, file, dryRun)
 	case "command":
 		args := inst.buildArgs(name, e)
-		if dryRun {
-			return ApplyResult{Status: "ok", Detail: "would run: " + inst.Bin + " " + strings.Join(args, " ")}
+		bin := inst.Bin
+		if inst.resolveBin != nil {
+			if p := inst.resolveBin(); p != "" {
+				bin = p
+			}
 		}
-		cmd := exec.Command(inst.Bin, args...)
+		if dryRun {
+			return ApplyResult{Status: "ok", Detail: "would run: " + bin + " " + strings.Join(args, " ")}
+		}
+		cmd := exec.Command(bin, args...)
 		cmd.Stdout = nil
 		cmd.Stderr = nil
 		if err := cmd.Run(); err != nil {
@@ -323,10 +329,16 @@ func applyRemove(c ClientDef, name string, dryRun bool) ApplyResult {
 			return ApplyResult{Status: "skipped", Detail: "no automated removal for this client"}
 		}
 		args := inst.removeArgs(name)
-		if dryRun {
-			return ApplyResult{Status: "ok", Detail: "would run: " + inst.Bin + " " + strings.Join(args, " ")}
+		bin := inst.Bin
+		if inst.resolveBin != nil {
+			if p := inst.resolveBin(); p != "" {
+				bin = p
+			}
 		}
-		if err := exec.Command(inst.Bin, args...).Run(); err != nil {
+		if dryRun {
+			return ApplyResult{Status: "ok", Detail: "would run: " + bin + " " + strings.Join(args, " ")}
+		}
+		if err := exec.Command(bin, args...).Run(); err != nil {
 			return ApplyResult{Status: "failed", Detail: firstLine(err.Error())}
 		}
 		return ApplyResult{Status: "ok"}

@@ -42,7 +42,7 @@ func TestJSONFreshCreatePermissions(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "sub", "mcp.json")
 	e := target("a@b.com", "tok")
-	if r, err := upsertJSONServer(f, "mcpServers", "favro", e, false); err != nil || r != writeOK {
+	if r, err := upsertJSONServer(f, "mcpServers", "favro", e, false, nil); err != nil || r != writeOK {
 		t.Fatalf("upsert=%v err=%v", r, err)
 	}
 	info, _ := os.Stat(f)
@@ -60,7 +60,7 @@ func TestJSONPreservesSiblings(t *testing.T) {
 	dir := t.TempDir()
 	f := writeFile(t, dir, "cfg.json", `{"version":1,"mcpServers":{"other":{"command":"x","args":[]}}}`)
 	e := target("a@b.com", "tok")
-	if _, err := upsertJSONServer(f, "mcpServers", "favro", e, false); err != nil {
+	if _, err := upsertJSONServer(f, "mcpServers", "favro", e, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	got := read(t, f)
@@ -76,11 +76,11 @@ func TestJSONIdempotent(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "cfg.json")
 	e := target("a@b.com", "tok")
-	if _, err := upsertJSONServer(f, "mcpServers", "favro", e, false); err != nil {
+	if _, err := upsertJSONServer(f, "mcpServers", "favro", e, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	first := read(t, f)
-	if r, err := upsertJSONServer(f, "mcpServers", "favro", e, false); err != nil || r != writeNoop {
+	if r, err := upsertJSONServer(f, "mcpServers", "favro", e, false, nil); err != nil || r != writeNoop {
 		t.Fatalf("second upsert=%v err=%v want noop", r, err)
 	}
 	if read(t, f) != first {
@@ -94,7 +94,7 @@ func TestJSONInstallUninstallRoundTrip(t *testing.T) {
 	orig := `{"mcpServers":{"other":{"command":"x"}}}`
 	f := writeFile(t, dir, "cfg.json", orig)
 	e := target("a@b.com", "tok")
-	if _, err := upsertJSONServer(f, "mcpServers", "favro", e, false); err != nil {
+	if _, err := upsertJSONServer(f, "mcpServers", "favro", e, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	if r, err := removeJSONServer(f, "mcpServers", "favro", false); err != nil || r != writeOK {
@@ -111,7 +111,7 @@ func TestJSONHandlesBOM(t *testing.T) {
 	dir := t.TempDir()
 	f := writeFile(t, dir, "cfg.json", "\xEF\xBB\xBF"+`{"mcpServers":{}}`)
 	e := target("a@b.com", "tok")
-	if r, err := upsertJSONServer(f, "mcpServers", "favro", e, false); err != nil || r != writeOK {
+	if r, err := upsertJSONServer(f, "mcpServers", "favro", e, false, nil); err != nil || r != writeOK {
 		t.Fatalf("upsert=%v err=%v", r, err)
 	}
 	if !strings.Contains(read(t, f), `"favro"`) {
@@ -125,7 +125,7 @@ func TestJSONSkipsUnparseable(t *testing.T) {
 	orig := "{not valid json"
 	f := writeFile(t, dir, "cfg.json", orig)
 	e := target("a@b.com", "tok")
-	if r, err := upsertJSONServer(f, "mcpServers", "favro", e, false); err != nil || r != writeSkippedUnparseable {
+	if r, err := upsertJSONServer(f, "mcpServers", "favro", e, false, nil); err != nil || r != writeSkippedUnparseable {
 		t.Fatalf("upsert=%v err=%v want skipped", r, err)
 	}
 	if read(t, f) != orig {

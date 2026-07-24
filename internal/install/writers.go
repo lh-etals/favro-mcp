@@ -52,6 +52,18 @@ func envFlagArgs(e ServerTarget) []string {
 	return out
 }
 
+// opencodeEntry builds the OpenCode mcp entry shape:
+//
+//	{type:"local", command:[...], enabled:true, environment:{...}}
+func opencodeEntry(e ServerTarget) map[string]any {
+	cmd := append([]string{e.Command}, e.Args...)
+	m := map[string]any{"type": "local", "command": cmd, "enabled": true}
+	if len(e.Env) > 0 {
+		m["environment"] = e.Env
+	}
+	return m
+}
+
 func entryEquals(a, b any) bool {
 	// Normalize both sides so a nil slice/map and a missing key compare equal
 	// (e.g. an existing "args": [] vs our omitted args). Otherwise every install
@@ -143,7 +155,7 @@ func readJSONTolerant(file string) (fresh bool, data map[string]any, err error) 
 	return false, data, nil
 }
 
-func upsertJSONServer(file, topKey, name string, e ServerTarget, dryRun bool) (WriteResult, error) {
+func upsertJSONServer(file, topKey, name string, e ServerTarget, dryRun bool, entryFn func(ServerTarget) map[string]any) (WriteResult, error) {
 	fresh, data, err := readJSONTolerant(file)
 	if err != nil {
 		return "", err
@@ -155,7 +167,10 @@ func upsertJSONServer(file, topKey, name string, e ServerTarget, dryRun bool) (W
 	if servers == nil {
 		servers = map[string]any{}
 	}
-	obj := entryObject(e)
+	if entryFn == nil {
+		entryFn = entryObject
+	}
+	obj := entryFn(e)
 	if !fresh && entryEquals(servers[name], obj) {
 		return writeNoop, nil
 	}

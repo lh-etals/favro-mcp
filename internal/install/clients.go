@@ -1,6 +1,7 @@
 package install
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"runtime"
 )
@@ -14,10 +15,12 @@ type ServerTarget struct {
 
 // InstallKind describes how a client's config is written.
 type InstallKind struct {
-	Kind    string // "file-json" | "file-toml" | "file-yaml-list" | "command"
-	pathFn  func() string
-	TopKey  string // for file-json
-	Bin     string
+	Kind     string // "file-json" | "file-toml" | "file-yaml-list" | "command"
+	pathFn   func() string
+	TopKey   string // for file-json
+	entryFn  func(ServerTarget) map[string]any // custom file-json entry shape (nil = default)
+	Bin      string
+	resolveBin func() string // full path to the CLI (PATH + install dirs); falls back to Bin
 	buildArgs func(name string, e ServerTarget) []string
 	removeArgs func(name string) []string
 }
@@ -53,7 +56,8 @@ func geminiConfig() string      { return home(".gemini", "settings.json") }
 func windsurfConfig() string    { return home(".codeium", "windsurf", "mcp_config.json") }
 func clineConfig() string       { return home(".cline", "data", "settings", "cline_mcp_settings.json") }
 
-func amazonQConfig() string { return home(".aws", "amazonq", "mcp.json") }
+func amazonQConfig() string   { return home(".aws", "amazonq", "mcp.json") }
+func opencodeConfig() string  { return xdgConfig("opencode", "opencode.json") }
 func continueConfig() string { return home(".continue", "config.yaml") }
 
 func rooConfig() string {
@@ -107,11 +111,14 @@ var Clients = []ClientDef{
 		ID:   "claude-code",
 		Name: "Claude Code (CLI)",
 		Detect: func() bool {
-			return which("claude") != "" || exists(home(".claude.json")) || exists(home(".claude"))
+			// PATH, the config dir/file, OR an install not on PATH.
+			return whichIn("claude", claudeBins()...) != "" ||
+				exists(home(".claude.json")) || exists(home(".claude"))
 		},
 		Install: InstallKind{
-			Kind: "command",
-			Bin:  "claude",
+			Kind:       "command",
+			Bin:        "claude",
+			resolveBin: func() string { return whichIn("claude", claudeBins()...) },
 			buildArgs: func(name string, e ServerTarget) []string {
 				args := []string{"mcp", "add", name, "-s", "user"}
 				args = append(args, envFlagArgs(e)...)
@@ -209,6 +216,48 @@ var Clients = []ClientDef{
 		},
 		Install:    InstallKind{Kind: "file-yaml-list", pathFn: continueConfig},
 		ReloadHint: "reload Continue config",
+	},
+	{
+		ID:   "opencode",
+		Name: "OpenCode",
+		Detect: func() bool {
+			return whichIn("opencode", npmGlobalBins()...) != "" ||
+				exists(xdgConfig("opencode")) || exists(home(".config", "opencode"))
+		},
+		Install: InstallKind{
+			Kind:    "file-json",
+			pathFn:  opencodeConfig,
+			TopKey:  "mcp",
+			entryFn: opencodeEntry,
+		},
+		ReloadHint: "restart OpenCode",
+	},
+	{
+		ID:   "vscode",
+		Name: "VS Code",
+		Detect: func() bool {
+			return whichIn("code", vscodeBins()...) != "" ||
+				appBundle("Visual Studio Code.app") ||
+				appBundle("Visual Studio Code - Insiders.app") ||
+				hasVscodeExt("ms-vscode.cpptools") // VS Code family present if any ext dir exists-ish
+		},
+		Install: InstallKind{
+			Kind:       "command",
+			Bin:        "code",
+			resolveBin: func() string { return whichIn("code", vscodeBins()...) },
+			buildArgs: func(name string, e ServerTarget) []string {
+				entry := map[string]any{"name": name, "type": "stdio", "command": e.Command}
+				if len(e.Args) > 0 {
+					entry["args"] = e.Args
+				}
+				if len(e.Env) > 0 {
+					entry["env"] = e.Env
+				}
+				b, _ := json.Marshal(entry)
+				return []string{"--add-mcp", string(b)}
+			},
+		},
+		ReloadHint: "reload the VS Code window (MCP: List Servers)",
 	},
 }
 
