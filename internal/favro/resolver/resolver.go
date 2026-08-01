@@ -117,10 +117,13 @@ func MatchByName[T any](items []T, getID func(T) string, getName func(T) string,
 // Organization --------------------------------------------------------------
 
 func (r *Resolver) Organization(idOrName string) (*favro.Organization, error) {
+	// Any probe failure falls through to the list, not just IsMiss: this
+	// resolver runs before an organization is selected, so the client sends no
+	// organizationId header, and Favro answers /organizations/{id} without one
+	// with 401 rather than 404. The list endpoint needs no header, and a real
+	// credential problem still surfaces from it.
 	if org, err := r.c.GetOrganization(idOrName); err == nil && org != nil {
 		return org, nil
-	} else if err != nil && !IsMiss(err) {
-		return nil, err
 	}
 	orgs, err := r.c.GetOrganizations()
 	if err != nil {
