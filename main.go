@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -47,18 +46,11 @@ func main() {
 	// Bare invocation: interactive app on a real terminal; otherwise (pipe,
 	// MCP client, cron, ...) run the MCP server for backwards compatibility
 	// with v0.8.0 client configs that spawn `favro-mcp` with no subcommand.
-	if isTerminal() {
+	if install.Interactive(os.Stdin, os.Stdout) {
 		app.RunApp()
 		return
 	}
 	runMCPServer()
-}
-
-// isTerminal returns true if stdin AND stdout are TTYs.
-func isTerminal() bool {
-	fi, _ := os.Stdin.Stat()
-	fo, _ := os.Stdout.Stat()
-	return (fi.Mode()&os.ModeCharDevice != 0) && (fo.Mode()&os.ModeCharDevice != 0)
 }
 
 // runMCPServer starts the stdio MCP server (what AI clients launch).
@@ -125,7 +117,7 @@ func runLogin(args []string) {
 }
 
 // runInstaller parses the install/uninstall flags and delegates to the
-// installer (ported from sana-mcp's install module).
+// installer (the sana-mcp / interactive-terminal-mcp install module shape).
 func runInstaller(uninstall bool, args []string) {
 	fs := flag.NewFlagSet("favro-mcp", flag.ExitOnError)
 	dryRun := fs.Bool("dry-run", false, "show what would change without writing anything")
@@ -136,19 +128,27 @@ func runInstaller(uninstall bool, args []string) {
 	token := fs.String("token", "", "Favro API token (else FAVRO_API_TOKEN env or `favro-mcp login`)")
 	_ = fs.Parse(args)
 
-	opts := install.Options{DryRun: *dryRun, Yes: *yes, Name: *name, Toolset: *toolset, Email: *email, Token: *token}
-	var err error
-	if uninstall {
-		err = install.RunUninstall(opts)
-	} else {
-		err = install.RunInstall(opts)
+	// Credentials are managed centrally by `favro-mcp login`, so client configs
+	// embed them only when explicitly provided via flags or FAVRO_* env.
+	if *email == "" {
+		*email = os.Getenv("FAVRO_EMAIL")
 	}
-	if err != nil {
-		if errors.Is(err, install.ErrCancelled) {
-			fmt.Println("Cancelled; no changes made.")
-			return
-		}
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	if *token == "" {
+		*token = os.Getenv("FAVRO_API_TOKEN")
 	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	os.Exit(install.Run(ctx, install.Options{
+		Uninstall: uninstall,
+		DryRun:    *dryRun,
+		Yes:       *yes,
+		Name:      *name,
+		Toolset:   *toolset,
+		Email:     *email,
+		Token:     *token,
+		Stdin:     os.Stdin,
+		Stdout:    os.Stdout,
+		Stderr:    os.Stderr,
+	}))
 }

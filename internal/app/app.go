@@ -5,7 +5,7 @@
 package app
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -18,13 +18,13 @@ import (
 	"github.com/lh-etals/favro-mcp/internal/credentials"
 	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/lh-etals/favro-mcp/internal/install"
-	"golang.org/x/term"
 )
 
 // isTerminal reports whether stdin AND stdout are interactive TTYs (bubbletea
-// inline mode requires both).
+// inline mode requires both). One implementation for the whole program, owned
+// by the install package.
 func isTerminal() bool {
-	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+	return install.Interactive(os.Stdin, os.Stdout)
 }
 
 // RunApp is the interactive CLI app. It builds a single appModel and runs it
@@ -48,12 +48,12 @@ func RunApp() {
 		if !m.reconfigure {
 			return
 		}
-		// Hand the TTY off to the installer, then resume the app.
+		// Hand the TTY off to the installer, then resume the app. A non-zero
+		// exit already explained itself on the installer's own screen.
 		m.reconfigure = false
-		if err := install.RunInstall(install.Options{}); err != nil && !errors.Is(err, install.ErrCancelled) {
-			fmt.Fprintln(os.Stderr, styleError.Render("  Error: "+err.Error()))
-			return
-		}
+		install.Run(context.Background(), install.Options{
+			Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr,
+		})
 		// Refresh login state in case the installer wrote new creds.
 		m.session, _ = NewSession()
 		m.step = stepMenu

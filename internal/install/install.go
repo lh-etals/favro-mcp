@@ -1,494 +1,194 @@
+// Package install registers the MCP server with the AI harnesses on this
+// machine, in the shape shared with sana-mcp and interactive-terminal-mcp.
+//
+// Detection and config writing are detect-harness's job. This package decides
+// what to show, what to ask, and what to do with the answers.
 package install
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
-	"time"
+	"path/filepath"
+	"sort"
 
-	"github.com/lh-etals/favro-mcp/internal/credentials"
 	"github.com/lh-etals/favro-mcp/internal/mcpserver"
-	"github.com/pelletier/go-toml/v2"
-	"gopkg.in/yaml.v3"
+	detectharness "github.com/sairaph/detect-harness"
 )
 
-// execTimeout caps how long an installer/remover subprocess (claude, code, ...)
-// may run before being killed, so a hung client can't freeze the whole TUI.
-const execTimeout = 10 * time.Second
+// ServerName is the default entry name written into every harness
+// configuration, overridable with --name.
+const ServerName = "favro"
 
-// Options controls install/uninstall behaviour.
-type Options struct {
-	DryRun  bool
-	Yes     bool
-	Name    string
-	Toolset string // "", "read", "write", "delete", or "custom"
-
-	// Credentials written into each client's env block (instead of the login
-	// store). If empty, the server reads `favro-mcp login` creds at runtime.
-	Email string
-	Token string
+// Harness is one detected AI client, in the shape the UI needs.
+type Harness struct {
+	ID   detectharness.ID
+	Name string
+	// State is present, absent, or unavailable. Unavailable stays distinct from
+	// absent so a permission error is never reported as "not installed".
+	State       detectharness.DetectionState
+	Configured  bool
+	ConfigError string
+	ReloadHint  string
 }
 
-// ApplyResult is the outcome of registering with one client.
-type ApplyResult struct {
-	Status string // "ok" | "noop" | "skipped" | "failed"
-	Detail string
+// Selectable reports whether the user may toggle this harness. An environment
+// that could not be inspected is shown but cannot be chosen, because writing to
+// it would be guesswork.
+func (h Harness) Selectable() bool {
+	return h.State != detectharness.Unavailable && h.ConfigError == ""
 }
 
-func safeDetect(c ClientDef) bool {
-	defer func() { _ = recover() }()
-	return c.Detect()
-}
-
-func mapWrite(r WriteResult, file string, dryRun bool) ApplyResult {
-	switch r {
-	case writeSkippedUnparseable:
-		return ApplyResult{Status: "skipped", Detail: file + " is not valid; left untouched"}
-	case writeNoop:
-		return ApplyResult{Status: "noop"}
-	default:
-		d := file
-		if dryRun {
-			d = "would write " + file
-		}
-		return ApplyResult{Status: "ok", Detail: d}
-	}
-}
-
-func applyClient(c ClientDef, name string, e ServerTarget, dryRun bool) ApplyResult {
-	inst := c.Install
-	switch inst.Kind {
-	case "file-json":
-		file := inst.path()
-		if file == "" {
-			return ApplyResult{Status: "skipped", Detail: "not supported on this platform"}
-		}
-		r, err := upsertJSONServer(file, inst.TopKey, name, e, dryRun, inst.entryFn)
-		if err != nil {
-			return ApplyResult{Status: "failed", Detail: err.Error()}
-		}
-		return mapWrite(r, file, dryRun)
-	case "file-toml":
-		file := inst.path()
-		if file == "" {
-			return ApplyResult{Status: "skipped", Detail: "not supported on this platform"}
-		}
-		r, err := upsertTomlServer(file, name, e, dryRun)
-		if err != nil {
-			return ApplyResult{Status: "failed", Detail: err.Error()}
-		}
-		return mapWrite(r, file, dryRun)
-	case "file-yaml-list":
-		file := inst.path()
-		if file == "" {
-			return ApplyResult{Status: "skipped", Detail: "not supported on this platform"}
-		}
-		r, err := upsertYamlServerList(file, name, e, dryRun)
-		if err != nil {
-			return ApplyResult{Status: "failed", Detail: err.Error()}
-		}
-		return mapWrite(r, file, dryRun)
-	case "command":
-		args := inst.buildArgs(name, e)
-		bin := inst.Bin
-		if inst.resolveBin != nil {
-			if p := inst.resolveBin(); p != "" {
-				bin = p
-			}
-		}
-		if dryRun {
-			return ApplyResult{Status: "ok", Detail: "would run: " + bin + " " + strings.Join(args, " ")}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, bin, args...)
-		var stderr bytes.Buffer
-		cmd.Stderr = &stderr
-		if err := cmd.Run(); err != nil {
-			combined := strings.ToLower(err.Error() + " " + stderr.String())
-			if strings.Contains(combined, "already exists") || strings.Contains(combined, "already configured") {
-				return ApplyResult{Status: "noop"}
-			}
-			detail := firstLine(err.Error())
-			if s := strings.TrimSpace(stderr.String()); s != "" {
-				detail = firstLine(s)
-			}
-			return ApplyResult{Status: "failed", Detail: detail}
-		}
-		return ApplyResult{Status: "ok"}
-	}
-	return ApplyResult{Status: "skipped", Detail: "unknown install kind"}
-}
-
-func firstLine(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return s[:i]
-	}
-	return s
-}
-
-// isCurrentlyRegistered reports whether `name` is already present in this
-// client's config (or, for command-style clients where we can't tell, assumes
-// it is so the installer never skips a legitimate removal). Used to diff the
-// user's new selection against the prior state and unregister deselected
-// clients.
-func isCurrentlyRegistered(c ClientDef, serverName string) bool {
-	inst := c.Install
-	switch inst.Kind {
-	case "file-json":
-		file := inst.path()
-		if file == "" {
-			return false
-		}
-		_, data, err := readJSONTolerant(file)
-		if err != nil || data == nil {
-			return false
-		}
-		servers, _ := data[inst.TopKey].(map[string]any)
-		_, exists := servers[serverName]
-		return exists
-	case "file-toml":
-		file := inst.path()
-		if file == "" {
-			return false
-		}
-		raw, err := os.ReadFile(file)
-		if err != nil {
-			return false
-		}
-		raw = bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF})
-		if strings.TrimSpace(string(raw)) == "" {
-			return false
-		}
-		doc := map[string]any{}
-		if err := toml.Unmarshal(raw, &doc); err != nil {
-			return false
-		}
-		servers, _ := doc["mcp_servers"].(map[string]any)
-		_, exists := servers[serverName]
-		return exists
-	case "file-yaml-list":
-		file := inst.path()
-		if file == "" {
-			return false
-		}
-		raw, err := os.ReadFile(file)
-		if err != nil {
-			return false
-		}
-		rootMap := map[string]any{}
-		if err := yaml.Unmarshal(raw, &rootMap); err != nil {
-			return false
-		}
-		list, _ := rootMap["mcpServers"].([]any)
-		for _, it := range list {
-			if m, ok := it.(map[string]any); ok {
-				if n, _ := m["name"].(string); n == serverName {
-					return true
-				}
-			}
-		}
-		return false
-	case "command":
-		// Can't easily inspect external CLI state; assume registered so a
-		// deselected detected client still gets a removal attempt.
-		return true
-	}
-	return false
-}
-
-func describe(r ApplyResult) string {
-	switch r.Status {
-	case "ok":
-		if r.Detail != "" {
-			return "registered -> " + r.Detail
-		}
-		return "registered"
-	case "noop":
-		return "already registered"
-	case "skipped":
-		return "skipped: " + r.Detail
-	case "failed":
-		return "failed: " + r.Detail
-	}
-	return ""
-}
-
-// RunInstall detects installed MCP clients and registers this server with the
-// ones the user chooses. It is idempotent and non-destructive.
+// StatusText renders the harness state for a person, in at most two words.
 //
-// On a real terminal (no --yes) the entire interactive flow - toolset, client
-// selection, optional custom tools, optional login, applying, summary - runs as
-// a single tea.Program so the screen evolves in place instead of appending a
-// new block per step. In unattended mode (--yes or no TTY) it applies sensible
-// defaults and prints results directly.
-func RunInstall(opts Options) error {
-	name := opts.Name
-	if name == "" {
-		name = "favro"
-	}
-
-	// Credentials are managed centrally by `favro-mcp login` (read by the
-	// server at runtime), so client configs do not embed secrets by default.
-	// We only embed them when explicitly provided via flags or FAVRO_* env.
-	email := opts.Email
-	if email == "" {
-		email = os.Getenv("FAVRO_EMAIL")
-	}
-	token := opts.Token
-	if token == "" {
-		token = os.Getenv("FAVRO_API_TOKEN")
-	}
-	embedCreds := email != "" && token != ""
-
-	var detected, others []ClientDef
-	for _, c := range Clients {
-		if safeDetect(c) {
-			detected = append(detected, c)
-		} else {
-			others = append(others, c)
-		}
-	}
-
-	if !opts.Yes && isTTY() {
-		return runInteractive(opts, name, email, token, embedCreds, detected, others)
-	}
-	return runUnattended(opts, name, email, token, embedCreds, detected, others)
-}
-
-// runInteractive drives the single-program installer UI.
-func runInteractive(opts Options, name, email, token string, embedCreds bool, detected, others []ClientDef) error {
-	if len(detected) == 0 && len(others) == 0 {
-		fmt.Println("No supported clients known for this platform.")
-		return nil
-	}
-	// Snapshot each detected client's current registration state BEFORE the
-	// prompt so deselected-but-registered clients can be unregistered.
-	wasRegistered := map[string]bool{}
-	for _, c := range detected {
-		if isCurrentlyRegistered(c, name) {
-			wasRegistered[c.ID] = true
-		}
-	}
-	needLogin := !embedCreds && !credentials.Exists()
-	m := newInstallModel(opts, name, email, token, embedCreds, needLogin, detected, others, wasRegistered)
-	return runForm(m)
-}
-
-// runUnattended applies defaults (Read+Write toolset, all detected clients)
-// without any prompts. Used for --yes or when stdin/stdout is not a TTY.
-func runUnattended(opts Options, name, email, token string, embedCreds bool, detected, others []ClientDef) error {
-	env := map[string]string{}
-	switch opts.Toolset {
-	case mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete:
-		env["FAVRO_TOOLSET"] = opts.Toolset
-	case "custom":
-		if opts.Yes {
-			return fmt.Errorf("--toolset=custom requires interactive selection (omit --yes)")
-		}
-		// Non-interactive custom selection isn't possible; default to Read+Write.
-		env["FAVRO_TOOLSET"] = mcpserver.TierWrite
-	case "":
-		env["FAVRO_TOOLSET"] = mcpserver.TierWrite
+// "cannot inspect" is its own answer. Reporting an environment that could not
+// be read as "not detected" states the one thing the detection did not
+// establish, and contradicted the message the same row gives when it is
+// selected.
+func (h Harness) StatusText() string {
+	switch {
+	case h.Configured:
+		return "configured"
+	case h.State == detectharness.Detected:
+		return "detected"
+	case !h.Selectable():
+		return "cannot inspect"
 	default:
-		return fmt.Errorf("unknown --toolset %q (use read, write, delete, or custom)", opts.Toolset)
+		return "not detected"
 	}
+}
 
-	if embedCreds {
-		env["FAVRO_EMAIL"] = email
-		env["FAVRO_API_TOKEN"] = token
-	} else if !credentials.Exists() {
-		if !opts.Yes {
-			// Non-interactive, no creds, no --yes: nothing more we can do.
-			return ErrCancelled
-		}
-		fmt.Println("Note: Favro credentials not set. Run `favro-mcp login` (or export FAVRO_EMAIL/FAVRO_API_TOKEN) so the server can authenticate.")
-		fmt.Println()
-	}
+// Installer wraps detect-harness with this project's server definition.
+type Installer struct {
+	installer *detectharness.Installer
+}
 
-	target, err := serverTarget(env)
+// DefaultEnv is the env block written when nothing narrows the toolset: the
+// recommended Read + Write tier, no embedded credentials.
+func DefaultEnv() map[string]string {
+	return map[string]string{"FAVRO_TOOLSET": mcpserver.TierWrite}
+}
+
+// NewInstaller builds an installer that registers this binary under name with
+// the given env block. The toolset is chosen mid-flow, so the installer used
+// for detection carries DefaultEnv and is rebuilt with the real env just
+// before applying; construction is cheap and does no I/O.
+func NewInstaller(name string, env map[string]string) (*Installer, error) {
+	executable, err := os.Executable()
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("resolve this binary: %w", err)
 	}
-
-	if len(detected) == 0 {
-		fmt.Println("No supported clients detected. Re-run without --yes to pick manually.")
-		return nil
+	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
+		executable = resolved
 	}
-
-	detectedSet := map[string]bool{}
-	for _, c := range detected {
-		detectedSet[c.ID] = true
+	// The registered command runs the MCP server explicitly rather than relying
+	// on the bare-invocation fallback, so a harness that allocates a TTY still
+	// gets a server rather than the interactive application.
+	inner, err := detectharness.New(detectharness.StdioServer{
+		Name:    name,
+		Command: executable,
+		Args:    []string{"mcp"},
+		Env:     env,
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	fmt.Printf("Registering server %q...\n", name)
-	if opts.DryRun {
-		fmt.Print("Dry run - no files will be changed.\n\n")
-	}
-	var results []ApplyResult
-	for _, c := range Clients {
-		if !detectedSet[c.ID] {
-			continue
-		}
-		r := applyClient(c, name, target, opts.DryRun)
-		results = append(results, r)
-		fmt.Printf("  %s: %s\n", c.Name, describe(r))
-	}
-	fmt.Println()
-	allNoop := len(results) > 0
-	for _, r := range results {
-		if r.Status != "noop" {
-			allNoop = false
-			break
-		}
-	}
-	if allNoop {
-		fmt.Println("All selected clients are already configured. No changes needed.")
-	} else {
-		fmt.Println("Restart your AI clients for changes to take effect.")
-	}
-	fmt.Println()
-	fmt.Println("Run favro-mcp to configure, login, or interact with Favro from the console.")
-	return nil
+	return &Installer{installer: inner}, nil
 }
 
-// RunUninstall removes this server from the MCP clients the user chooses.
-func RunUninstall(opts Options) error {
-	name := opts.Name
-	if name == "" {
-		name = "favro"
+// Detect probes the machine and returns the harnesses worth showing, detected
+// and configured ones first, then the rest alphabetically.
+//
+// Whether a harness is already configured is answered by planning the
+// registration and seeing which harnesses report no work to do. Detecting a
+// config file only proves the client exists, not that this server is in it.
+// The comparison includes the env block, so a registration carrying a
+// different toolset shows as "detected" and applying reports it replaced.
+func (i *Installer) Detect(ctx context.Context) []Harness {
+	detections := i.installer.Detect(ctx)
+
+	ids := make([]detectharness.ID, 0, len(detections))
+	for _, detection := range detections {
+		ids = append(ids, detection.ID)
 	}
-	var detected []ClientDef
-	for _, c := range Clients {
-		if safeDetect(c) {
-			detected = append(detected, c)
+	registered := map[detectharness.ID]bool{}
+	if plan := i.installer.Plan(ctx, ids, detectharness.Present, planOptions()); plan != nil {
+		for _, change := range plan.Changes() {
+			registered[change.HarnessID] = change.State == detectharness.ChangeNoop
 		}
-	}
-	if len(detected) == 0 {
-		fmt.Println("No supported clients detected.")
-		return nil
 	}
 
-	var chosen []ClientDef
-	if opts.Yes {
-		chosen = detected
-	} else {
-		rows := make([]multiRow, len(detected))
-		for i, c := range detected {
-			rows[i] = multiRow{id: c.ID, label: c.Name, checked: true}
-		}
-		out, err := runMultiSelect(fmt.Sprintf("Remove %q from which clients?", name), rows)
-		if err != nil {
-			return err
-		}
-		idSet := map[string]bool{}
-		for _, r := range out {
-			if r.checked {
-				idSet[r.id] = true
-			}
-		}
-		for _, c := range Clients {
-			if idSet[c.ID] {
-				chosen = append(chosen, c)
-			}
-		}
+	harnesses := make([]Harness, 0, len(detections))
+	for _, detection := range detections {
+		harnesses = append(harnesses, Harness{
+			ID:          detection.ID,
+			Name:        detection.Name,
+			State:       detection.State,
+			Configured:  registered[detection.ID],
+			ConfigError: detection.ConfigError,
+			ReloadHint:  detection.ReloadHint,
+		})
 	}
-	if len(chosen) == 0 {
-		fmt.Println("Nothing selected; no changes made.")
-		return nil
-	}
-
-	if opts.DryRun {
-		fmt.Print("Dry run - no files will be changed.\n\n")
-	}
-	for _, c := range chosen {
-		r := applyRemove(c, name, opts.DryRun)
-		fmt.Printf("  %s: %s\n", c.Name, describeRemove(r, opts.DryRun))
-	}
-	fmt.Println("\nDone.")
-	return nil
+	sort.SliceStable(harnesses, func(a, b int) bool {
+		left, right := harnesses[a], harnesses[b]
+		if (left.State == detectharness.Detected) != (right.State == detectharness.Detected) {
+			return left.State == detectharness.Detected
+		}
+		return left.Name < right.Name
+	})
+	return harnesses
 }
 
-func applyRemove(c ClientDef, name string, dryRun bool) ApplyResult {
-	inst := c.Install
-	switch inst.Kind {
-	case "file-json":
-		file := inst.path()
-		if file == "" {
-			return ApplyResult{Status: "skipped", Detail: "not supported on this platform"}
-		}
-		r, err := removeJSONServer(file, inst.TopKey, name, dryRun)
-		if err != nil {
-			return ApplyResult{Status: "failed", Detail: err.Error()}
-		}
-		return mapWrite(r, file, dryRun)
-	case "file-toml":
-		file := inst.path()
-		if file == "" {
-			return ApplyResult{Status: "skipped", Detail: "not supported on this platform"}
-		}
-		r, err := removeTomlServer(file, name, dryRun)
-		if err != nil {
-			return ApplyResult{Status: "failed", Detail: err.Error()}
-		}
-		return mapWrite(r, file, dryRun)
-	case "file-yaml-list":
-		file := inst.path()
-		if file == "" {
-			return ApplyResult{Status: "skipped", Detail: "not supported on this platform"}
-		}
-		r, err := removeYamlServerList(file, name, dryRun)
-		if err != nil {
-			return ApplyResult{Status: "failed", Detail: err.Error()}
-		}
-		return mapWrite(r, file, dryRun)
-	case "command":
-		if inst.removeArgs == nil {
-			return ApplyResult{Status: "skipped", Detail: "no automated removal for this client"}
-		}
-		args := inst.removeArgs(name)
-		bin := inst.Bin
-		if inst.resolveBin != nil {
-			if p := inst.resolveBin(); p != "" {
-				bin = p
-			}
-		}
-		if dryRun {
-			return ApplyResult{Status: "ok", Detail: "would run: " + bin + " " + strings.Join(args, " ")}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, bin, args...)
-		var rerr bytes.Buffer
-		cmd.Stderr = &rerr
-		if err := cmd.Run(); err != nil {
-			combined := strings.ToLower(err.Error() + " " + rerr.String())
-			if strings.Contains(combined, "not found") || strings.Contains(combined, "no such") {
-				return ApplyResult{Status: "noop"}
-			}
-			detail := firstLine(err.Error())
-			if se := strings.TrimSpace(rerr.String()); se != "" {
-				detail = firstLine(se)
-			}
-			return ApplyResult{Status: "failed", Detail: detail}
-		}
-		return ApplyResult{Status: "ok"}
-	}
-	return ApplyResult{Status: "skipped", Detail: "unknown install kind"}
+// planOptions replaces an existing entry of the same name rather than refusing.
+//
+// The entry is called "favro". A same-name entry that does not match is this
+// program's own earlier registration - versions before the detect-harness
+// rewrite wrote their own config entries, and upgrading from them is the case
+// this exists to serve. Refusing meant the upgrade reported "another server is
+// registered under this name", exited non-zero, and could never succeed
+// however many times it was run.
+func planOptions() detectharness.PlanOptions {
+	return detectharness.PlanOptions{ConflictPolicy: detectharness.ConflictReplace}
 }
 
-func describeRemove(r ApplyResult, dryRun bool) string {
-	if r.Status == "ok" {
-		if dryRun {
-			return "would remove"
+// Apply registers or removes the server for the given harnesses.
+func (i *Installer) Apply(ctx context.Context, ids []detectharness.ID, desired detectharness.DesiredState) []detectharness.Result {
+	if len(ids) == 0 {
+		return nil
+	}
+	return i.installer.Ensure(ctx, ids, desired, planOptions())
+}
+
+// PlanResults previews what Apply would do, in Apply's own result shape, so a
+// dry run renders through the same summary vocabulary as a real one.
+func (i *Installer) PlanResults(ctx context.Context, ids []detectharness.ID, desired detectharness.DesiredState) []detectharness.Result {
+	if len(ids) == 0 {
+		return nil
+	}
+	plan := i.installer.Plan(ctx, ids, desired, planOptions())
+	changes := plan.Changes()
+	results := make([]detectharness.Result, 0, len(changes))
+	for _, change := range changes {
+		state := detectharness.ApplyState("")
+		switch change.State {
+		case detectharness.ChangeReady:
+			state = detectharness.Applied
+		case detectharness.ChangeNoop:
+			state = detectharness.ApplyNoop
+		case detectharness.ChangeConflict:
+			state = detectharness.ApplyConflict
+		case detectharness.ChangeUnavailable:
+			state = detectharness.ApplySkipped
 		}
-		return "removed"
+		results = append(results, detectharness.Result{
+			HarnessID: change.HarnessID,
+			Name:      change.Name,
+			Path:      change.Path,
+			Desired:   change.Desired,
+			State:     state,
+			Action:    change.Action,
+			Reason:    change.Reason,
+		})
 	}
-	if r.Status == "noop" {
-		return "not registered (nothing to remove)"
-	}
-	return describe(r)
+	return results
 }

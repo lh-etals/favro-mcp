@@ -1,10 +1,13 @@
 # favro-mcp installer (Windows). Run in PowerShell:
 #   irm https://github.com/lh-etals/favro-mcp/raw/main/install.ps1 | iex
 $ErrorActionPreference = 'Stop'
+# Invoke-WebRequest's built-in progress bar is slow and flickers badly in
+# Windows PowerShell; the download below renders its own.
 $ProgressPreference    = 'SilentlyContinue'
 
-$Owner = 'lh-etals'
-$Repo  = 'favro-mcp'
+$Owner  = 'lh-etals'
+$Repo   = 'favro-mcp'
+$Binary = 'favro-mcp'
 
 # --- detect arch -----------------------------------------------------------
 $arch = $env:PROCESSOR_ARCHITECTURE
@@ -14,25 +17,32 @@ switch ($arch) {
   default                  { Write-Host "  Unsupported architecture: $arch" -ForegroundColor Red; return }
 }
 
-$Asset = "favro-mcp-$target.exe"
+$Asset = "$Binary-$target.exe"
 $Url   = "https://github.com/$Owner/$Repo/releases/latest/download/$Asset"
 
 # --- install location ------------------------------------------------------
-$InstallDir = Join-Path $env:LOCALAPPDATA 'favro-mcp'
-$Target     = Join-Path $InstallDir 'favro-mcp.exe'
+$InstallDir = Join-Path $env:LOCALAPPDATA $Repo
+$Target     = Join-Path $InstallDir "$Binary.exe"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-# --- download with progress bar -------------------------------------------
 Write-Host ""
 Write-Host "  favro-mcp installer" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Downloading $Asset..."
 
-# If the old binary is still present, try to clear it so we can write fresh.
-# If it's locked (e.g. favro-mcp is running), we fall back to a temp file below.
+# Always download beside the target, never over it.
+#
+# Clearing the old binary first meant a re-install that could not download -
+# offline, a 5xx from the release host, a full disk - left no binary at all,
+# with the user PATH still pointing at an empty directory. The shell installer
+# has always downloaded to a temporary file and moved it into place only after
+# the bytes are on disk; this does the same.
 $tempTarget = "$Target.new"
-$usingTemp  = $false
-Remove-Item $Target -Force -ErrorAction SilentlyContinue
+
+# Sweep up binaries displaced by earlier installs, now that whatever had them
+# open has most likely exited.
+Get-ChildItem -Path $InstallDir -Filter "$Binary.exe.old-*" -ErrorAction SilentlyContinue |
+  ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
 
 $request = $null
 $response = $null
@@ -44,12 +54,7 @@ try {
   $response = $request.GetResponse()
   $total = [int]$response.ContentLength
   $stream = $response.GetResponseStream()
-  try {
-    $fs = [System.IO.File]::Create($Target)
-  } catch {
-    $fs = [System.IO.File]::Create($tempTarget)
-    $usingTemp = $true
-  }
+  $fs = [System.IO.File]::Create($tempTarget)
   $buffer = New-Object byte[] 65536
   $downloaded = 0
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -62,11 +67,14 @@ try {
     $filled = [math]::Floor($pct / 5)
     if ($filled -gt 20) { $filled = 20 }
     $bar = ('#' * $filled).PadRight(20)
+    # One decimal always, so a whole number reads as 3.0 rather than 3 and the
+    # line does not change width as it counts up. The shell installer renders
+    # the identical line; the two should be indistinguishable.
     $dlMB = [math]::Round($dl / 1048576, 1)
     $totMB = [math]::Round($tot / 1048576, 1)
     $speed = if ($el -gt 0) { [math]::Round($dlMB / $el, 1) } else { 0 }
     $eta = if ($speed -gt 0) { [math]::Round((($totMB - $dlMB)) / $speed) } else { 0 }
-    $line = ("  [{0}] {1,3}%  {2}/{3} MB  {4} MB/s  ETA {5:00}s" -f $bar, $pct, $dlMB, $totMB, $speed, $eta)
+    $line = ("  [{0}] {1,3}%  {2:0.0}/{3:0.0} MB  {4:0.0} MB/s  ETA {5:00}s" -f $bar, $pct, $dlMB, $totMB, $speed, $eta)
     # Pad so shorter lines fully overwrite the previous render (no stale chars).
     Write-Host ("`r{0}" -f $line.PadRight(72)) -NoNewline
   }
@@ -85,9 +93,11 @@ try {
   Write-Host ""
 } catch {
   Write-Host ""
-  Write-Host "  Download failed: $_" -ForegroundColor Red
+  Write-Host "  Download failed. Please check your connection and try again." -ForegroundColor Red
   Write-Host "  URL: $Url" -ForegroundColor Red
-  Remove-Item $Target -ErrorAction SilentlyContinue
+  Write-Host "  Reason: $_" -ForegroundColor Red
+  # Only the partial download is removed. Whatever was installed before is
+  # still there and still works.
   Remove-Item $tempTarget -ErrorAction SilentlyContinue
   return
 } finally {
@@ -96,38 +106,88 @@ try {
   if ($response -ne $null) { $response.Close() }
 }
 
-# If we downloaded to a temp file (old exe was locked), swap it into place.
-if ($usingTemp) {
-  Remove-Item $Target -Force -ErrorAction SilentlyContinue
+# Nothing was downloaded, so nothing is replaced.
+if (-not (Test-Path $tempTarget) -or (Get-Item $tempTarget).Length -eq 0) {
+  Remove-Item $tempTarget -ErrorAction SilentlyContinue
+  Write-Host "  Download did not complete; nothing was installed." -ForegroundColor Red
+  return
+}
+
+# Swap the new binary into place by moving the old one aside first.
+#
+# Two Windows facts make this the only reliable order. Windows PowerShell's
+# Move-Item -Force does not overwrite an existing destination, so moving onto
+# the target fails with "Cannot create a file when that file already exists".
+# And the file being replaced is usually running - an MCP client holds
+# favro-mcp.exe open for as long as it is connected - so deleting it first fails
+# too. Windows refuses to delete a running image but does allow renaming one,
+# which is what this relies on.
+#
+# The displaced file gets a unique name, so a copy still held open by a running
+# client cannot block the next install. Whatever is left is swept up above on a
+# later run, once nothing has it open.
+$oldTarget = "$Target.old-$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"
+$movedAside = $false
+if (Test-Path $Target) {
   try {
-    Move-Item $tempTarget $Target -Force
+    Move-Item $Target $oldTarget
+    $movedAside = $true
   } catch {
     Write-Host ""
-    Write-Host "  Could not replace favro-mcp.exe: $_" -ForegroundColor Red
+    Write-Host "  Could not replace $Binary.exe: $_" -ForegroundColor Red
     Write-Host "  Close any running favro-mcp process and re-run the installer." -ForegroundColor Yellow
     Remove-Item $tempTarget -ErrorAction SilentlyContinue
     return
   }
 }
-# Clean up a partial / zero-byte download so a later retry starts fresh.
-if (-not (Test-Path $Target) -or (Get-Item $Target).Length -eq 0) {
-  Remove-Item $Target -ErrorAction SilentlyContinue
-  Write-Host "  Download did not complete; nothing was installed." -ForegroundColor Red
+try {
+  Move-Item $tempTarget $Target
+} catch {
+  Write-Host ""
+  Write-Host "  Could not replace $Binary.exe: $_" -ForegroundColor Red
+  # Put the working binary back rather than leaving nothing installed.
+  if ($movedAside) { Move-Item $oldTarget $Target -ErrorAction SilentlyContinue }
+  Remove-Item $tempTarget -ErrorAction SilentlyContinue
   return
 }
+# Fails while a client still has it open, which is expected and harmless.
+if ($movedAside) { Remove-Item $oldTarget -Force -ErrorAction SilentlyContinue }
 
-# --- add to user PATH if missing (silent on success) -----------------------
+# --- add to user PATH if missing -------------------------------------------
+# SetEnvironmentVariable updates the stored user PATH, which only new processes
+# read. This shell keeps the PATH it started with, so the command is not found
+# here no matter what we do -- the user has to be told, or the very next thing
+# they type fails with "not recognized".
+$pathChanged = $false
 $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
 if ($userPath -notlike "*$InstallDir*") {
   $newPath = if ($userPath) { "$InstallDir;$userPath" } else { $InstallDir }
   [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+  $pathChanged = $true
+}
+# Make it work in this session too, so `configure` below and anything the user
+# tries immediately afterwards can find the binary without reopening a console.
+if ($env:PATH -notlike "*$InstallDir*") {
+  $env:PATH = "$InstallDir;$env:PATH"
 }
 
 # --- launch the configurer --------------------------------------------------
-Write-Host ""
 try {
   & $Target configure
 } catch {
   Write-Host "  configure did not complete: $_" -ForegroundColor Red
-  Write-Host "  Re-run 'favro-mcp configure' later to finish setup." -ForegroundColor Yellow
+  Write-Host "  Re-run ``$Binary configure`` later to finish setup." -ForegroundColor Yellow
+}
+
+# --- tell the user what to do next ------------------------------------------
+if ($pathChanged) {
+  Write-Host ""
+  Write-Host "  Added to your PATH: $InstallDir" -ForegroundColor Cyan
+  Write-Host ""
+  Write-Host "  Open a NEW PowerShell window before running $Binary." -ForegroundColor Yellow
+  Write-Host "  This window still has the PATH it started with, so the command" -ForegroundColor Yellow
+  Write-Host "  will not be found here." -ForegroundColor Yellow
+  Write-Host ""
+  Write-Host "  In a new window:  $Binary"
+  Write-Host "  Or right now:     & '$Target'"
 }

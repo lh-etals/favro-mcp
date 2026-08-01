@@ -92,6 +92,16 @@ jobs:
           if [ -n "${{ inputs.version }}" ]; then V="${{ inputs.version }}"
           else V="${GITHUB_REF_NAME#v}"; fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Checksums
+        # Checksums cover the binaries only, and are computed before the
+        # installers are added: an installer cannot be listed in a file it
+        # would then have to verify against itself.
+        run: cd dist && sha256sum * > SHA256SUMS.txt
+      - name: Publish the installers alongside the binaries
+        # The documented one-liners fetch install.sh from raw/main, but the
+        # release keeps a matching copy so an install is reproducible against
+        # the exact binaries it shipped with.
+        run: cp install.sh install.ps1 dist/
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:

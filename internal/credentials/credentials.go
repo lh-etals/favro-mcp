@@ -82,7 +82,9 @@ func Save(email, token string) error {
 
 // Prompt interactively asks for the Favro email and API token (input hidden
 // when on a TTY) and returns them. It does NOT save - the caller verifies
-// against the API first, then calls Save only on success.
+// against the API first, then calls Save only on success. This is the plain
+// prompt behind `favro-mcp login`; the installer asks the same question with
+// its own TUI screens.
 func Prompt() (email, token string, err error) {
 	r := bufio.NewReader(os.Stdin)
 	fmt.Print("Favro email: ")

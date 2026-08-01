@@ -1,71 +1,88 @@
 package install
 
 import (
+	"context"
 	"fmt"
-	"os"
+	"io"
 	"strings"
+	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"golang.org/x/term"
 
 	"github.com/lh-etals/favro-mcp/internal/credentials"
 	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/lh-etals/favro-mcp/internal/mcpserver"
+	detectharness "github.com/sairaph/detect-harness"
 )
 
-// ErrCancelled is returned when the user aborts an interactive prompt, or when
-// a prompt is invoked in a non-interactive context (no TTY).
-var ErrCancelled = fmt.Errorf("cancelled")
-
-// isTTY reports whether stdin AND stdout are interactive terminals. The
-// bubbletea UI requires both; otherwise we fall back to unattended defaults
-// (or return ErrCancelled so the caller can react).
-func isTTY() bool {
-	return term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
-}
-
-// --- shared styles -----------------------------------------------------------
-
+// The installer is one program whose screen evolves in place, in the shape
+// sana-mcp and interactive-terminal-mcp use: a bold header, one section line,
+// the content, and a footer. Printing each step instead appends a new block per
+// question and leaves the finished ones stranded above the current one.
 var (
-	styleTitle  = lipgloss.NewStyle().Bold(true)
-	styleCursor = lipgloss.NewStyle().Foreground(lipgloss.Color("14")) // cyan
-	styleOn     = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))  // green
-	styleOff    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))  // bright-black / grey
-	styleDim    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	styleHint   = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	styleFooter = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	styleErr    = lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // red
+	styleTitle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("81"))
+	styleDim    = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	styleCursor = lipgloss.NewStyle().Foreground(lipgloss.Color("81"))
+	styleOn     = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	styleOff    = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	styleError  = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
+	styleHint   = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	styleFooter = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 )
 
-func indexOf(s []int, v int) int {
-	for i, x := range s {
-		if x == v {
-			return i
-		}
-	}
-	return -1
+// Options carries everything Run needs, streams included, so the whole flow is
+// wired through one seam and there is exactly one TTY decision.
+type Options struct {
+	Uninstall bool
+	DryRun    bool
+	Yes       bool
+	Name      string
+	Toolset   string // "", "read", "write", "delete", or "custom"
+
+	// Credentials written into each client's env block (instead of the login
+	// store). If empty, the server reads `favro-mcp login` creds at runtime.
+	Email string
+	Token string
+
+	Stdin  io.Reader
+	Stdout io.Writer
+	Stderr io.Writer
 }
 
-// ===========================================================================
-// Unified installer model: the WHOLE interactive flow (toolset -> clients ->
-// custom tools -> login -> verifying -> configuring -> done) runs as ONE
-// tea.Program, so bubbletea's inline renderer redraws a single screen in place
-// instead of appending a new block per step.
-// ===========================================================================
-
+// step is one screen of the installer.
 type step int
 
 const (
-	stepToolset step = iota
-	stepClients
-	stepCustomTools  // only if Custom chosen
-	stepLogin        // only if creds missing
-	stepVerifying    // network check while submitting login
-	stepConfiguring  // file I/O + exec while applying changes
+	// stepDetecting is first because probing every client walks the filesystem
+	// and takes a visible moment. Without a screen for it the installer prints
+	// its download bar and then shows nothing at all.
+	stepDetecting step = iota
+	stepToolset
+	stepCustomTools // reachable only from Custom in stepToolset
+	stepHarnesses
+	stepApplying
+	stepLogin
+	stepEmail
+	stepToken
+	stepVerifying
 	stepDone
+	// stepPlan and stepRemoving belong to uninstall, which is the same program
+	// with a different first screen.
+	stepPlan
+	stepRemoving
 )
+
+// header matches the installer script's own output: a leading blank line and a
+// two-space indent, so the download and the setup read as one thing rather than
+// two programs taking turns.
+func header() string {
+	return "\n" + styleTitle.Render("  favro-mcp setup")
+}
+
+func uninstallHeader() string {
+	return "\n" + styleTitle.Render("  favro-mcp uninstall")
+}
 
 var toolsetOptions = []string{
 	"Read-only",
@@ -81,374 +98,362 @@ var toolsetValues = []string{
 	"custom",
 }
 
-// clientRow is one row in the clients step. Detected rows are selectable;
-// others are visible only when "show all" is toggled on and the cursor skips
-// them.
-type clientRow struct {
-	client   ClientDef
-	detected bool
-	checked  bool
-}
-
 // toolRow is one toggleable line in the custom-tools step.
 type toolRow struct {
 	id      string
-	label   string
-	hint    string
+	tier    string
 	checked bool
 }
 
-// applyResult pairs a client with its install/remove outcome during applying.
-type applyResult struct {
-	client ClientDef
-	res    ApplyResult
-	action string // "install" | "remove"
-}
+type model struct {
+	ctx  context.Context
+	opts Options
+	name string
+	// installer carries DefaultEnv for detection and is rebuilt with the chosen
+	// env just before applying.
+	installer *Installer
 
-type installModel struct {
-	step   step
-	cancel bool
+	step  step
+	frame int
 
 	// toolset
 	toolsetCursor int
-	toolsetChoice string // resolved once the toolset step is done
+	toolsetChoice string
+	toolRows      []toolRow
+	toolCursor    int
 
 	// clients
-	clientRows   []clientRow
-	clientCursor int
-	showAll      bool
+	harnesses []Harness
+	selected  map[detectharness.ID]bool
+	cursor    int
+	showAll   bool
+	results   []detectharness.Result
 
-	// custom tools
-	toolRows   []toolRow
-	toolCursor int
+	// choices, used by every yes/no screen
+	choice int
 
 	// login
-	emailTI    textinput.Model
-	tokenTI    textinput.Model
-	loginFocus int // 0 = email, 1 = token
-	loginError string
+	signedIn bool
+	email    string
+	token    string
+	// embedCreds means credentials came in via flags or FAVRO_* env and are
+	// written into each client's env block instead of the login store.
+	embedCreds bool
+	input      string
 
-	// applying / done
-	applyResults []applyResult
-	applyError   string
+	// unreachable is the PATH line to add when the installed command will not
+	// resolve from a new shell. The script exports the directory for its own
+	// child processes, so the process PATH proves nothing here.
+	unreachable string
 
-	// resolved data
-	opts          Options
-	name          string
-	email         string // creds to embed (from flags/env) when embedCreds
-	token         string
-	embedCreds    bool
-	needLogin     bool
-	detected      []ClientDef
-	others        []ClientDef
-	wasRegistered map[string]bool
+	// uninstall
+	registered []detectharness.ID
+	removed    bool
+
+	// settled marks the point of no return: client configuration written.
+	// Nothing after it may be described as a run that changed nothing.
+	settled bool
+	message string
+	failure string
+	cancel  bool
 }
 
-func newInstallModel(
-	opts Options,
-	name, email, token string,
-	embedCreds, needLogin bool,
-	detected, others []ClientDef,
-	wasRegistered map[string]bool,
-) *installModel {
-	m := &installModel{
-		opts:          opts,
-		name:          name,
-		email:         email,
-		token:         token,
-		embedCreds:    embedCreds,
-		needLogin:     needLogin,
-		detected:      detected,
-		others:        others,
-		wasRegistered: wasRegistered,
-	}
+type detectedMsg []Harness
+type appliedMsg []detectharness.Result
+type removedMsg []detectharness.Result
+type spinMsg struct{}
+type verifiedMsg struct{ err error }
 
-	// Clients: detected (pre-checked) then others (hidden until 'v').
-	rows := make([]clientRow, 0, len(detected)+len(others))
-	for _, c := range detected {
-		rows = append(rows, clientRow{client: c, detected: true, checked: true})
-	}
-	for _, c := range others {
-		rows = append(rows, clientRow{client: c, detected: false, checked: false})
-	}
-	m.clientRows = rows
-	if len(detected) > 0 {
-		m.clientCursor = 0 // first detected row (kept valid by moveClient)
-	}
+// spinFrames are deliberately plain. The installer is the first thing a person
+// sees, sometimes in a console whose font has no braille glyphs, and a row of
+// replacement boxes is a worse first impression than a character that draws.
+var spinFrames = []string{"-", "\\", "|", "/"}
 
-	// Login inputs (only used if the login step runs).
-	e := textinput.New()
-	e.Prompt = "  Email:  "
-	e.Placeholder = "you@example.com"
-	e.CharLimit = 200
-	if email != "" {
-		e.SetValue(email)
-	}
-	m.emailTI = e
-	t := textinput.New()
-	t.Prompt = "  Token:  "
-	t.Placeholder = "Favro API token"
-	t.EchoMode = textinput.EchoPassword
-	t.EchoCharacter = '*'
-	t.CharLimit = 400
-	m.tokenTI = t
+func (m *model) spinner() string { return spinFrames[m.frame%len(spinFrames)] }
 
-	// Custom-tool toggles (read+write pre-checked, delete off).
-	cat := mcpserver.ToolCatalog()
-	tr := make([]toolRow, 0, len(cat))
-	for _, info := range cat {
-		tr = append(tr, toolRow{
-			id:      info.Name,
-			label:   info.Name,
-			hint:    info.Tier,
-			checked: info.Tier == mcpserver.TierRead || info.Tier == mcpserver.TierWrite,
-		})
+// spinning is every step whose view draws a spinner.
+func (m *model) spinning() bool {
+	switch m.step {
+	case stepDetecting, stepApplying, stepRemoving, stepVerifying:
+		return true
 	}
-	m.toolRows = tr
-
-	// Starting step: pick the toolset unless it was pre-resolved by a flag.
-	switch opts.Toolset {
-	case mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete:
-		m.toolsetChoice = opts.Toolset
-		m.step = stepClients
-	case "custom":
-		m.toolsetChoice = "custom"
-		m.step = stepClients
-	default:
-		m.step = stepToolset
-		m.toolsetCursor = 1 // highlight Read + Write
-	}
-	return m
+	return false
 }
 
-func (m *installModel) Init() tea.Cmd { return nil }
+func spin() tea.Cmd {
+	return tea.Tick(110*time.Millisecond, func(time.Time) tea.Msg { return spinMsg{} })
+}
 
-func (m *installModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if k, ok := msg.(tea.KeyMsg); ok && k.String() == "ctrl+c" {
-		m.cancel = true
-		return m, tea.Quit
+func (m *model) Init() tea.Cmd {
+	if m.step == stepPlan {
+		return nil
 	}
-	// Async results from verifyCredsCmd / startApply land here:
-	switch msg := msg.(type) {
-	case credsVerifiedMsg:
-		if msg.err != nil {
-			m.loginError = fmt.Sprintf("verification failed: %v", msg.err)
-			m.tokenTI.SetValue("")
-			m.step = stepLogin
-			m.emailTI.Focus()
-			return m, textinput.Blink
+	return tea.Batch(spin(), m.detect())
+}
+
+func (m *model) detect() tea.Cmd {
+	return func() tea.Msg { return detectedMsg(m.installer.Detect(m.ctx)) }
+}
+
+func (m *model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
+	switch message := message.(type) {
+	case spinMsg:
+		// Every step that draws a spinner has to keep asking for frames, or it
+		// renders one frozen character that reads as a stall.
+		if !m.spinning() {
+			return m, nil
 		}
-		if err := credentials.Save(m.email, m.token); err != nil {
-			m.applyError = fmt.Sprintf("failed to save credentials: %v", err)
+		m.frame++
+		return m, spin()
+
+	case detectedMsg:
+		m.adopt(message)
+		return m, nil
+
+	case appliedMsg:
+		m.results = message
+		// Client configuration has been written, so this is the point of no
+		// return - except on a dry run, which changed nothing and must still be
+		// free to cancel out of.
+		if !m.opts.DryRun {
+			m.settled = true
+		}
+		m.unreachable = pathHint()
+		if m.signedIn {
 			m.step = stepDone
 			return m, nil
 		}
-		m.needLogin = false
-		m.step = stepConfiguring
-		return m, m.startApply()
-	case applyDoneMsg:
-		m.applyResults = msg.results
-		m.applyError = msg.err
+		m.step, m.choice, m.message = stepLogin, 0, ""
+		return m, nil
+
+	case verifiedMsg:
+		if message.err != nil {
+			// Wrong credentials or an unreachable Favro is recoverable: it
+			// belongs on the screen the user is on, not in the fatal-error path.
+			m.message = "verification failed: " + message.err.Error()
+			m.step, m.input, m.token = stepEmail, m.email, ""
+			return m, nil
+		}
+		if err := credentials.Save(m.email, m.token); err != nil {
+			m.failure = "failed to save credentials: " + err.Error()
+			return m, tea.Quit
+		}
+		m.signedIn, m.message = true, ""
 		m.step = stepDone
 		return m, nil
+
+	case removedMsg:
+		m.settled = !m.opts.DryRun
+		m.results, m.removed = message, true
+		m.step = stepDone
+		return m, nil
+
+	case tea.KeyMsg:
+		return m.key(message)
 	}
-	// The login step must also handle non-key messages (cursor blink).
-	if m.step == stepLogin {
-		return m.updateLogin(msg)
-	}
-	k, ok := msg.(tea.KeyMsg)
-	if !ok {
+	return m, nil
+}
+
+func (m *model) key(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Applying, removing, and verifying take no keys at all, ctrl+c included.
+	// Each is a few seconds of writes or one network call, and interrupting one
+	// leaves half the clients registered under a message saying nothing
+	// happened.
+	if m.step == stepApplying || m.step == stepRemoving || m.step == stepVerifying {
 		return m, nil
 	}
+	if key.String() == "ctrl+c" {
+		m.cancel = true
+		return m, tea.Quit
+	}
 	switch m.step {
+	case stepDetecting:
+		// Nothing has been written yet, so leaving is free.
+		if name := key.String(); name == "q" || name == "esc" {
+			m.cancel = true
+			return m, tea.Quit
+		}
 	case stepToolset:
-		return m, m.updateToolset(k)
-	case stepClients:
-		return m, m.updateClients(k)
+		return m.toolsetKey(key)
 	case stepCustomTools:
-		return m, m.updateTools(k)
+		return m.toolsKey(key)
+	case stepHarnesses:
+		return m.harnessKey(key)
+	case stepLogin:
+		return m.chooseKey(key, 2, m.confirmSignIn)
+	case stepEmail, stepToken:
+		return m.inputKey(key)
+	case stepPlan:
+		return m.chooseKey(key, 2, m.confirmUninstall)
 	case stepDone:
-		switch k.String() {
-		case "enter", "q", "esc":
+		switch key.String() {
+		case "enter", "esc", "q":
 			return m, tea.Quit
 		}
 	}
 	return m, nil
 }
 
-func (m *installModel) updateToolset(k tea.KeyMsg) tea.Cmd {
-	switch k.String() {
-	case "q", "esc":
-		m.cancel = true
-		return tea.Quit
+// chooseKey drives a two-option list. confirm is called with the chosen index.
+func (m *model) chooseKey(key tea.KeyMsg, options int, confirm func(int) tea.Cmd) (tea.Model, tea.Cmd) {
+	switch key.String() {
 	case "up", "k":
-		if m.toolsetCursor > 0 {
-			m.toolsetCursor--
-		}
+		m.choice = (m.choice - 1 + options) % options
 	case "down", "j":
-		if m.toolsetCursor < len(toolsetOptions)-1 {
-			m.toolsetCursor++
-		}
+		m.choice = (m.choice + 1) % options
+	case "enter":
+		return m, confirm(m.choice)
+	case "esc", "q":
+		return m, confirm(options - 1)
+	}
+	return m, nil
+}
+
+func (m *model) toolsetKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.String() {
+	case "up", "k":
+		m.toolsetCursor = (m.toolsetCursor - 1 + len(toolsetOptions)) % len(toolsetOptions)
+	case "down", "j":
+		m.toolsetCursor = (m.toolsetCursor + 1) % len(toolsetOptions)
 	case "enter":
 		m.toolsetChoice = toolsetValues[m.toolsetCursor]
-		m.step = stepClients
-	}
-	return nil
-}
-
-func (m *installModel) updateClients(k tea.KeyMsg) tea.Cmd {
-	switch k.String() {
-	case "q", "esc":
-		m.cancel = true
-		return tea.Quit
-	case "v":
-		m.showAll = !m.showAll
-	case "up", "k":
-		m.moveClient(-1)
-	case "down", "j":
-		m.moveClient(1)
-	case " ":
-		m.toggleClient()
-	case "enter":
 		if m.toolsetChoice == "custom" {
 			m.step = stepCustomTools
-			return nil
+			return m, nil
 		}
-		return m.toLoginOrApply()
+		m.step = stepHarnesses
+	case "esc", "q":
+		m.cancel = true
+		return m, tea.Quit
 	}
-	return nil
+	return m, nil
 }
 
-func (m *installModel) updateTools(k tea.KeyMsg) tea.Cmd {
-	switch k.String() {
-	case "q", "esc":
-		m.cancel = true
-		return tea.Quit
+func (m *model) toolsKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.String() {
 	case "up", "k":
-		if m.toolCursor > 0 {
-			m.toolCursor--
-		}
+		m.toolCursor = (m.toolCursor - 1 + len(m.toolRows)) % len(m.toolRows)
 	case "down", "j":
-		if m.toolCursor < len(m.toolRows)-1 {
-			m.toolCursor++
-		}
+		m.toolCursor = (m.toolCursor + 1) % len(m.toolRows)
 	case " ":
-		if m.toolCursor >= 0 && m.toolCursor < len(m.toolRows) {
-			m.toolRows[m.toolCursor].checked = !m.toolRows[m.toolCursor].checked
+		m.toolRows[m.toolCursor].checked = !m.toolRows[m.toolCursor].checked
+	case "a":
+		anyUnchecked := false
+		for _, row := range m.toolRows {
+			if !row.checked {
+				anyUnchecked = true
+				break
+			}
+		}
+		for index := range m.toolRows {
+			m.toolRows[index].checked = anyUnchecked
 		}
 	case "enter":
-		return m.toLoginOrApply()
+		m.step = stepHarnesses
+	case "esc":
+		// A sub-screen of the toolset question, so esc goes back to it.
+		m.step = stepToolset
+	case "q":
+		m.cancel = true
+		return m, tea.Quit
 	}
-	return nil
+	return m, nil
 }
 
-func (m *installModel) updateLogin(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if k, ok := msg.(tea.KeyMsg); ok {
-		switch k.String() {
-		case "esc":
-			m.cancel = true
-			return m, tea.Quit
-		case "tab", "shift+tab":
-			if m.loginFocus == 0 {
-				m.loginFocus = 1
-				m.emailTI.Blur()
-				m.tokenTI.Focus()
-			} else {
-				m.loginFocus = 0
-				m.tokenTI.Blur()
-				m.emailTI.Focus()
-			}
-			return m, textinput.Blink
-		case "enter":
-			return m, m.submitLogin()
+func (m *model) harnessKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.String() {
+	case "up", "k":
+		m.moveCursor(-1)
+	case "down", "j":
+		m.moveCursor(1)
+	case "v":
+		m.showAll = !m.showAll
+		if !m.onVisibleRow() || !m.harnesses[m.cursor].Selectable() {
+			m.cursor = m.firstSelectable()
 		}
+	case " ":
+		m.toggle()
+	case "a":
+		m.toggleAll()
+	case "enter":
+		m.step = stepApplying
+		return m, tea.Batch(spin(), m.apply())
+	case "esc", "q":
+		m.cancel = true
+		return m, tea.Quit
 	}
-	var cmd tea.Cmd
-	if m.loginFocus == 0 {
-		m.emailTI, cmd = m.emailTI.Update(msg)
-	} else {
-		m.tokenTI, cmd = m.tokenTI.Update(msg)
-	}
-	return m, cmd
+	return m, nil
 }
 
-// submitLogin captures the entered credentials and kicks off an async
-// verification against the Favro API. The UI flips to stepVerifying while the
-// network call runs; the result is handled in Update via credsVerifiedMsg.
-func (m *installModel) submitLogin() tea.Cmd {
-	email := strings.TrimSpace(m.emailTI.Value())
-	token := strings.TrimSpace(m.tokenTI.Value())
-	if email == "" || token == "" {
-		m.loginError = "email and token are required"
+func (m *model) inputKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch key.Type {
+	case tea.KeyEnter:
+		value := strings.TrimSpace(m.input)
+		if value == "" {
+			return m, nil
+		}
+		if m.step == stepEmail {
+			m.email, m.input, m.message = value, "", ""
+			m.step = stepToken
+			return m, nil
+		}
+		m.token, m.input = value, ""
+		m.step = stepVerifying
+		return m, tea.Batch(spin(), verifyCmd(m.ctx, m.email, m.token))
+	case tea.KeyEsc:
+		m.step = stepDone
+	case tea.KeyBackspace:
+		if runes := []rune(m.input); len(runes) > 0 {
+			m.input = string(runes[:len(runes)-1])
+		}
+	case tea.KeyRunes, tea.KeySpace:
+		m.input += string(key.Runes)
+	}
+	return m, nil
+}
+
+// adopt takes the detection result and sets up the selection it implies, then
+// opens on the toolset question unless a --toolset flag already answered it.
+func (m *model) adopt(harnesses []Harness) {
+	m.harnesses = harnesses
+	m.selected = map[detectharness.ID]bool{}
+	for _, harness := range harnesses {
+		m.selected[harness.ID] = harness.Configured ||
+			(harness.State == detectharness.Detected && harness.Selectable())
+	}
+	m.cursor = m.firstSelectable()
+	switch m.opts.Toolset {
+	case mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete:
+		m.toolsetChoice = m.opts.Toolset
+		m.step = stepHarnesses
+	case "custom":
+		m.toolsetChoice = "custom"
+		m.step = stepCustomTools
+	default:
+		m.step = stepToolset
+		m.toolsetCursor = 1 // open on the recommended Read + Write
+	}
+}
+
+func (m *model) confirmSignIn(choice int) tea.Cmd {
+	if choice != 0 {
+		m.step = stepDone
 		return nil
 	}
-	m.email = email
-	m.token = token
-	m.loginError = ""
-	m.step = stepVerifying
-	return verifyCredsCmd(email, token)
-}
-
-// toLoginOrApply advances from clients/custom-tools to the login step (if creds
-// are still missing) or straight to the async apply pipeline.
-func (m *installModel) toLoginOrApply() tea.Cmd {
-	if m.needLogin {
-		m.step = stepLogin
-		m.loginError = ""
-		m.loginFocus = 0
-		m.emailTI.Focus()
-		m.tokenTI.Blur()
-		return textinput.Blink
-	}
-	m.step = stepConfiguring
-	return m.startApply()
-}
-
-func (m *installModel) moveClient(dir int) {
-	idxs := m.detectedIdxs()
-	if len(idxs) == 0 {
-		return
-	}
-	pos := indexOf(idxs, m.clientCursor)
-	if pos < 0 {
-		m.clientCursor = idxs[0]
-		return
-	}
-	pos += dir
-	if pos < 0 {
-		pos = len(idxs) - 1
-	} else if pos >= len(idxs) {
-		pos = 0
-	}
-	m.clientCursor = idxs[pos]
-}
-
-func (m *installModel) toggleClient() {
-	if m.clientCursor >= 0 && m.clientCursor < len(m.clientRows) && m.clientRows[m.clientCursor].detected {
-		m.clientRows[m.clientCursor].checked = !m.clientRows[m.clientCursor].checked
-	}
-}
-
-func (m installModel) detectedIdxs() []int {
-	out := make([]int, 0, len(m.clientRows))
-	for i, r := range m.clientRows {
-		if r.detected {
-			out = append(out, i)
-		}
-	}
-	return out
+	m.step, m.input, m.message = stepEmail, m.email, ""
+	return nil
 }
 
 // computeEnv builds the env block written into each client config from the
 // chosen toolset / tools and (only when explicitly provided) credentials.
-func (m *installModel) computeEnv() map[string]string {
+func (m *model) computeEnv() map[string]string {
 	env := map[string]string{}
 	switch m.toolsetChoice {
 	case "custom":
 		var ids []string
-		for _, r := range m.toolRows {
-			if r.checked {
-				ids = append(ids, r.id)
+		for _, row := range m.toolRows {
+			if row.checked {
+				ids = append(ids, row.id)
 			}
 		}
 		if len(ids) == 0 {
@@ -458,6 +463,8 @@ func (m *installModel) computeEnv() map[string]string {
 		}
 	case mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete:
 		env["FAVRO_TOOLSET"] = m.toolsetChoice
+	default:
+		env["FAVRO_TOOLSET"] = mcpserver.TierWrite
 	}
 	if m.embedCreds {
 		env["FAVRO_EMAIL"] = m.email
@@ -466,344 +473,387 @@ func (m *installModel) computeEnv() map[string]string {
 	return env
 }
 
-// credsVerifiedMsg is returned by verifyCredsCmd with the verification outcome.
-type credsVerifiedMsg struct{ err error }
-
-// verifyCredsCmd checks the given credentials against the live Favro API and
-// reports success/failure via credsVerifiedMsg. Runs off the main loop so the
-// UI can show a "Verifying..." state instead of freezing.
-func verifyCredsCmd(email, token string) tea.Cmd {
-	return func() tea.Msg {
-		_, err := favro.NewClient(email, token, "").GetOrganizations()
-		return credsVerifiedMsg{err: err}
+// toolsetLabel names the chosen toolset for the summary grid.
+func (m *model) toolsetLabel() string {
+	if m.toolsetChoice == "custom" {
+		count := 0
+		for _, row := range m.toolRows {
+			if row.checked {
+				count++
+			}
+		}
+		if count == 0 {
+			return toolsetOptions[1]
+		}
+		return fmt.Sprintf("Custom (%d tools)", count)
 	}
-}
-
-// applyDoneMsg carries the results (or fatal error) of an apply run.
-type applyDoneMsg struct {
-	results []applyResult
-	err     string
-}
-
-// startApply returns a tea.Cmd that runs every selected client's install (and
-// unregisters deselected previously-registered clients) off the main loop and
-// reports results via applyDoneMsg. Inputs are snapshotted into locals so the
-// goroutine never races with the model's state.
-func (m *installModel) startApply() tea.Cmd {
-	chosenSet := map[string]bool{}
-	for _, r := range m.clientRows {
-		if r.detected && r.checked {
-			chosenSet[r.client.ID] = true
+	for index, value := range toolsetValues {
+		if value == m.toolsetChoice {
+			return toolsetOptions[index]
 		}
 	}
-	detectedSet := map[string]bool{}
-	for _, c := range m.detected {
-		detectedSet[c.ID] = true
-	}
+	return toolsetOptions[1]
+}
+
+func (m *model) apply() tea.Cmd {
 	env := m.computeEnv()
-	name := m.name
 	dryRun := m.opts.DryRun
-	wasRegistered := m.wasRegistered
-	return func() tea.Msg {
-		target, err := serverTarget(env)
-		if err != nil {
-			return applyDoneMsg{err: err.Error()}
-		}
-		var results []applyResult
-		for _, c := range Clients {
-			if !detectedSet[c.ID] {
-				continue
-			}
-			switch {
-			case chosenSet[c.ID]:
-				r := applyClient(c, name, target, dryRun)
-				results = append(results, applyResult{client: c, res: r, action: "install"})
-			case wasRegistered[c.ID]:
-				r := applyRemove(c, name, dryRun)
-				results = append(results, applyResult{client: c, res: r, action: "remove"})
-			}
-		}
-		return applyDoneMsg{results: results}
-	}
-}
-
-func (m installModel) resultLine(r applyResult) string {
-	if r.action == "remove" {
-		return describeRemove(r.res, m.opts.DryRun)
-	}
-	return describe(r.res)
-}
-
-// --- views ------------------------------------------------------------------
-
-func (m *installModel) View() string {
-	switch m.step {
-	case stepToolset:
-		return m.viewToolset()
-	case stepClients:
-		return m.viewClients()
-	case stepCustomTools:
-		return m.viewTools()
-	case stepLogin:
-		return m.viewLogin()
-	case stepVerifying:
-		return styleTitle.Render("favro-mcp installer") + "\n\nVerifying credentials..."
-	case stepConfiguring:
-		return styleTitle.Render("favro-mcp installer") + "\n\nConfiguring clients..."
-	case stepDone:
-		return m.viewDone()
-	}
-	return ""
-}
-
-func (m *installModel) viewToolset() string {
-	var b strings.Builder
-	b.WriteString(styleTitle.Render("favro-mcp installer"))
-	b.WriteString("\nToolset - which tools should the server expose?\n\n")
-	for i, o := range toolsetOptions {
-		cursor := " "
-		if i == m.toolsetCursor {
-			cursor = styleCursor.Render(">")
-		}
-		dot := " "
-		if i == m.toolsetCursor {
-			dot = styleOn.Render("●")
-		}
-		label := o
-		if o == "Read + Write" {
-			label += styleHint.Render("  (recommended)")
-		}
-		b.WriteString(fmt.Sprintf(" %s %s %s\n", cursor, dot, label))
-	}
-	b.WriteString("\n" + styleFooter.Render("up/down move . enter select . q cancel"))
-	return b.String()
-}
-
-func (m *installModel) viewClients() string {
-	var b strings.Builder
-	b.WriteString(styleTitle.Render("favro-mcp installer"))
-	b.WriteString("\nAI Clients - register with which clients?\n\n")
-	anyShown := false
-	for i, r := range m.clientRows {
-		if !r.detected && !m.showAll {
+	name := m.name
+	var present, absent []detectharness.ID
+	for _, harness := range m.harnesses {
+		if !harness.Selectable() {
 			continue
 		}
-		anyShown = true
-		cursor := " "
-		if i == m.clientCursor && r.detected {
-			cursor = styleCursor.Render(">")
+		if m.selected[harness.ID] {
+			present = append(present, harness.ID)
+		} else if harness.Configured {
+			absent = append(absent, harness.ID)
 		}
-		var mark, label string
-		if r.detected {
-			if r.checked {
-				mark = styleOn.Render("[x]")
-			} else {
-				mark = styleOff.Render("[ ]")
-			}
-			label = fmt.Sprintf("%-22s %s", r.client.Name, styleDim.Render("(detected)"))
-		} else {
-			mark = styleDim.Render("[ ]")
-			label = styleDim.Render(fmt.Sprintf("%-22s (not detected)", r.client.Name))
+	}
+	return func() tea.Msg {
+		// The detection installer carries the default env; the one that writes
+		// carries the env the user just chose.
+		installer, err := NewInstaller(name, env)
+		if err != nil {
+			installer = m.installer
 		}
-		b.WriteString(fmt.Sprintf(" %s %s %s\n", cursor, mark, label))
-	}
-	if !anyShown {
-		b.WriteString(styleDim.Render("  No clients detected. Install one (Claude Desktop,\n  Cursor, VS Code, ...) and re-run configure.\n"))
-	}
-	if len(m.others) > 0 {
-		hint := "press v to show other known clients"
-		if m.showAll {
-			hint = "press v to hide non-detected"
+		if dryRun {
+			results := installer.PlanResults(m.ctx, present, detectharness.Present)
+			return appliedMsg(append(results,
+				installer.PlanResults(m.ctx, absent, detectharness.Absent)...))
 		}
-		b.WriteString("\n" + styleDim.Render(hint))
+		results := installer.Apply(m.ctx, present, detectharness.Present)
+		return appliedMsg(append(results, installer.Apply(m.ctx, absent, detectharness.Absent)...))
 	}
-	b.WriteString("\n\n" + styleFooter.Render("up/down move . space toggle . v show all . enter confirm . q cancel"))
-	return b.String()
 }
 
-func (m *installModel) viewTools() string {
-	var b strings.Builder
-	b.WriteString(styleTitle.Render("favro-mcp installer"))
-	b.WriteString("\nCustom tools - toggle each tool (read+write pre-checked).\n\n")
-	for i, r := range m.toolRows {
-		cursor := " "
-		if i == m.toolCursor {
-			cursor = styleCursor.Render(">")
-		}
-		mark := styleOff.Render("[ ]")
-		if r.checked {
-			mark = styleOn.Render("[x]")
-		}
-		label := r.label
-		if r.hint != "" {
-			label = fmt.Sprintf("%-26s %s", r.label, styleDim.Render("("+r.hint+")"))
-		}
-		b.WriteString(fmt.Sprintf(" %s %s %s\n", cursor, mark, label))
+// verifyCmd checks the credentials against the live Favro API off the main
+// loop, so the screen shows a spinner instead of freezing.
+func verifyCmd(_ context.Context, email, token string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := favro.NewClient(email, token, "").GetOrganizations()
+		return verifiedMsg{err: err}
 	}
-	b.WriteString("\n" + styleFooter.Render("up/down move . space toggle . enter confirm . q cancel"))
-	return b.String()
 }
 
-func (m *installModel) viewLogin() string {
-	var b strings.Builder
-	b.WriteString(styleTitle.Render("favro-mcp installer"))
-	b.WriteString("\nLog in to Favro - credentials are verified then saved.\n\n")
-	b.WriteString(m.emailTI.View() + "\n\n")
-	b.WriteString(m.tokenTI.View() + "\n\n")
-	if m.loginError != "" {
-		b.WriteString(styleErr.Render(m.loginError) + "\n\n")
-	}
-	b.WriteString(styleFooter.Render("tab switch fields . enter submit . esc cancel"))
-	return b.String()
-}
-
-func (m *installModel) viewDone() string {
-	var b strings.Builder
-	if m.applyError != "" {
-		b.WriteString(styleErr.Render("Error: " + m.applyError) + "\n\n")
-	} else if len(m.applyResults) == 0 {
-		b.WriteString("Nothing selected; no changes made.\n\n")
-	} else {
-		if m.opts.DryRun {
-			b.WriteString(styleDim.Render("Dry run - no files were changed.") + "\n")
-		}
-		allNoop := len(m.applyResults) > 0
-		for _, r := range m.applyResults {
-			if r.res.Status != "noop" {
-				allNoop = false
-				break
-			}
-		}
-		if allNoop {
-			b.WriteString("All selected clients are already configured. No changes needed.\n")
-		} else {
-			for _, r := range m.applyResults {
-				b.WriteString(fmt.Sprintf("  %s: %s\n", r.client.Name, m.resultLine(r)))
-			}
-		}
-		b.WriteString("\n")
-		if !allNoop {
-			b.WriteString("Restart your AI clients for changes to take effect.\n\n")
-		}
-	}
-	b.WriteString(styleFooter.Render("Run favro-mcp to configure, login, or interact with Favro from the console."))
-	b.WriteString("\n" + styleFooter.Render("enter to exit"))
-	return b.String()
-}
-
-// runForm runs the entire interactive installer as a single tea.Program so the
-// screen evolves in place instead of appending a new block per step. Returns
-// ErrCancelled on a non-TTY or if the user aborts. The model is mutated in
-// place; the caller reads results from it after this returns.
-func runForm(m *installModel) error {
-	if !isTTY() {
-		return ErrCancelled
-	}
-	p := tea.NewProgram(m)
-	if _, err := p.Run(); err != nil {
-		return err
-	}
-	if m.cancel {
-		return ErrCancelled
-	}
-	return nil
-}
-
-// ===========================================================================
-// Multi-select (RunUninstall)
-// ===========================================================================
-
-// multiRow is one toggleable line in a multiModel.
-type multiRow struct {
-	id      string
-	label   string
-	hint    string
-	checked bool
-}
-
-// multiModel is an arrow-key multi-select. Used by RunUninstall.
-type multiModel struct {
-	title  string
-	footer string
-	rows   []multiRow
-	cursor int
-	cancel bool
-}
-
-func (m multiModel) Init() tea.Cmd { return nil }
-
-func (m multiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	k, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
-	}
-	switch k.String() {
-	case "ctrl+c", "q", "esc":
+func (m *model) confirmUninstall(choice int) tea.Cmd {
+	if choice != 0 {
 		m.cancel = true
-		return m, tea.Quit
-	case "up", "k":
-		if m.cursor > 0 {
-			m.cursor--
-		}
-	case "down", "j":
-		if m.cursor < len(m.rows)-1 {
-			m.cursor++
-		}
-	case " ":
-		if m.cursor >= 0 && m.cursor < len(m.rows) {
-			m.rows[m.cursor].checked = !m.rows[m.cursor].checked
-		}
-	case "enter":
-		return m, tea.Quit
+		return tea.Quit
 	}
-	return m, nil
+	m.step = stepRemoving
+	registered, dryRun := m.registered, m.opts.DryRun
+	return tea.Batch(spin(), func() tea.Msg {
+		if dryRun {
+			return removedMsg(m.installer.PlanResults(m.ctx, registered, detectharness.Absent))
+		}
+		return removedMsg(m.installer.Apply(m.ctx, registered, detectharness.Absent))
+	})
 }
 
-func (m multiModel) View() string {
-	var b strings.Builder
-	b.WriteString(styleTitle.Render(m.title))
-	b.WriteString("\n\n")
-	for i, r := range m.rows {
-		cursor := " "
-		if i == m.cursor {
-			cursor = styleCursor.Render(">")
+// --- selection helpers ------------------------------------------------------
+
+// visible is which harnesses earn a line: the ones that are here, the ones
+// already registered, and anything currently selected. A list of thirteen
+// clients, eleven of them "not detected", tells the user nothing they asked
+// for.
+//
+// Selected rows stay on screen even after v hides their group. Letting them
+// disappear meant a client revealed with v, selected, and then hidden again was
+// still registered - a config file written for software the user could no
+// longer see chosen, and could not unpick.
+func (m *model) visible() []int {
+	var indices []int
+	for index, harness := range m.harnesses {
+		if harness.State == detectharness.Detected || harness.Configured ||
+			m.showAll || m.selected[harness.ID] {
+			indices = append(indices, index)
 		}
-		mark := styleOff.Render("[ ]")
-		if r.checked {
-			mark = styleOn.Render("[x]")
-		}
-		label := r.label
-		if r.hint != "" {
-			label = fmt.Sprintf("%-26s %s", r.label, styleDim.Render("("+r.hint+")"))
-		}
-		b.WriteString(fmt.Sprintf(" %s %s %s\n", cursor, mark, label))
 	}
-	b.WriteString("\n" + styleFooter.Render(m.footer))
-	return b.String()
+	return indices
 }
 
-// runMultiSelect runs a multiModel and returns the final rows. On non-TTY or
-// cancel, returns ErrCancelled.
-func runMultiSelect(title string, rows []multiRow) ([]multiRow, error) {
-	if !isTTY() {
-		return nil, ErrCancelled
+// firstSelectable is where the cursor opens.
+//
+// It has to be a row the cursor is actually drawn on: the pointer is only
+// rendered for a selectable harness, so starting on an unselectable one opens a
+// list with no visible cursor at all.
+func (m *model) firstSelectable() int {
+	for _, index := range m.visible() {
+		if m.harnesses[index].Selectable() {
+			return index
+		}
 	}
-	if len(rows) == 0 {
-		return nil, nil
+	return m.firstVisible()
+}
+
+func (m *model) firstVisible() int {
+	if indices := m.visible(); len(indices) > 0 {
+		return indices[0]
 	}
-	m := multiModel{
-		title:  title,
-		footer: "up/down move . space toggle . enter confirm . q cancel",
-		rows:   rows,
+	return 0
+}
+
+// onVisibleRow reports whether the cursor is on a row that is actually drawn.
+//
+// With nothing detected the list is empty, and a cursor of zero still pointed
+// at a harness - so space on the "No AI clients detected" screen selected and
+// then registered a client that was never on screen.
+func (m *model) onVisibleRow() bool {
+	for _, index := range m.visible() {
+		if index == m.cursor {
+			return true
+		}
 	}
-	p := tea.NewProgram(m)
-	out, err := p.Run()
+	return false
+}
+
+// moveCursor walks the rows a pointer is drawn on.
+//
+// The pointer is only rendered for a selectable row, so stepping onto one that
+// cannot be configured left the list with no cursor visible anywhere.
+func (m *model) moveCursor(direction int) {
+	var indices []int
+	for _, index := range m.visible() {
+		if m.harnesses[index].Selectable() {
+			indices = append(indices, index)
+		}
+	}
+	if len(indices) == 0 {
+		return
+	}
+	position := 0
+	for index, value := range indices {
+		if value == m.cursor {
+			position = index
+		}
+	}
+	position += direction
+	if position < 0 {
+		position = len(indices) - 1
+	}
+	if position >= len(indices) {
+		position = 0
+	}
+	m.cursor = indices[position]
+}
+
+func (m *model) toggle() {
+	if m.cursor >= len(m.harnesses) || !m.onVisibleRow() {
+		return
+	}
+	harness := m.harnesses[m.cursor]
+	if !harness.Selectable() {
+		m.message = harness.Name + " could not be inspected, so it cannot be changed."
+		return
+	}
+	m.selected[harness.ID] = !m.selected[harness.ID]
+	m.message = ""
+	// A row shown only because it was selected leaves the list when it is not.
+	// Leaving the cursor on it made the next keypress do nothing at all.
+	if !m.onVisibleRow() {
+		m.cursor = m.firstSelectable()
+	}
+}
+
+// toggleAll turns every visible row on, or clears them if they are all on.
+//
+// Visible, not every harness. Selecting rows hidden behind v wrote real
+// configuration files for software the user does not have and cannot see, under
+// a message announcing that it had selected the detected ones.
+func (m *model) toggleAll() {
+	indices := m.visible()
+	anyUnselected := false
+	for _, index := range indices {
+		harness := m.harnesses[index]
+		if harness.Selectable() && !m.selected[harness.ID] {
+			anyUnselected = true
+			break
+		}
+	}
+	for _, index := range indices {
+		harness := m.harnesses[index]
+		if harness.Selectable() {
+			m.selected[harness.ID] = anyUnselected
+		}
+	}
+	selectable := 0
+	for _, index := range indices {
+		if m.harnesses[index].Selectable() {
+			selectable++
+		}
+	}
+	switch {
+	case anyUnselected:
+		m.message = "Selected every client shown."
+	case selectable > 0:
+		m.message = "Cleared every client shown."
+	default:
+		// Nothing on screen could be changed, so nothing is claimed.
+		m.message = ""
+	}
+}
+
+// connected counts the clients this run left registered.
+func (m *model) connected() int {
+	count := 0
+	for _, result := range m.results {
+		if result.Desired == detectharness.Present &&
+			(result.State == detectharness.Applied || result.State == detectharness.ApplyNoop) {
+			count++
+		}
+	}
+	return count
+}
+
+// reloadHint is one client and what has to be done to it. The client's name
+// stays attached: a bare instruction to restart something, with nothing saying
+// what, is not advice anyone can follow.
+type reloadHint struct {
+	client string
+	action string
+}
+
+func (m *model) reloadHints() []reloadHint {
+	byID := make(map[detectharness.ID]string, len(m.harnesses))
+	for _, harness := range m.harnesses {
+		byID[harness.ID] = harness.ReloadHint
+	}
+	var hints []reloadHint
+	for _, result := range m.results {
+		if result.Desired != detectharness.Present || result.State != detectharness.Applied {
+			continue
+		}
+		if action := byID[result.HarnessID]; action != "" {
+			hints = append(hints, reloadHint{client: result.Name, action: action})
+		}
+	}
+	return hints
+}
+
+// summarise renders one client's outcome in at most a few words. A dry run
+// speaks in the conditional so a preview is never mistaken for a change.
+func summarise(result detectharness.Result, enabling, dryRun bool) string {
+	switch result.State {
+	case detectharness.Applied:
+		if enabling {
+			// An update rewrote an entry that was already there under this
+			// name. Usually that is this program's own older registration, but
+			// it can be someone else's server - and silently calling that
+			// "registered" is the one case where the user needs the difference.
+			if result.Action == "update" {
+				if dryRun {
+					return "would replace an existing entry"
+				}
+				return "replaced an existing entry"
+			}
+			if dryRun {
+				return "would register"
+			}
+			return "registered"
+		}
+		if dryRun {
+			return "would remove"
+		}
+		return "removed"
+	case detectharness.ApplyNoop:
+		return "already correct"
+	case detectharness.ApplySkipped:
+		return "skipped: " + result.Reason
+	case detectharness.ApplyConflict:
+		return "conflict: another server is registered under this name"
+	case detectharness.ApplyFailed:
+		return "failed: " + result.Reason
+	default:
+		return string(result.State)
+	}
+}
+
+// Run executes configure, install, or uninstall and returns the process exit
+// code.
+func Run(ctx context.Context, opts Options) int {
+	name := opts.Name
+	if name == "" {
+		name = ServerName
+	}
+	switch opts.Toolset {
+	case "", mcpserver.TierRead, mcpserver.TierWrite, mcpserver.TierDelete, "custom":
+	default:
+		fmt.Fprintf(opts.Stderr,
+			"favro-mcp: unknown --toolset %q (use read, write, delete, or custom)\n", opts.Toolset)
+		return 1
+	}
+
+	installer, err := NewInstaller(name, DefaultEnv())
 	if err != nil {
-		return nil, err
+		fmt.Fprintln(opts.Stderr, "favro-mcp:", err)
+		return 1
 	}
-	r := out.(multiModel)
-	if r.cancel {
-		return nil, ErrCancelled
+	// No terminal means no questions can be asked, so nothing is asked.
+	if opts.Yes || !interactive(opts) {
+		return runUnattended(ctx, installer, name, opts)
 	}
-	return r.rows, nil
+
+	state := &model{ctx: ctx, opts: opts, name: name, installer: installer}
+	state.embedCreds = opts.Email != "" && opts.Token != ""
+	state.email, state.token = opts.Email, opts.Token
+	if state.embedCreds || credentials.Exists() {
+		state.signedIn = true
+		if !state.embedCreds {
+			if email, _, err := credentials.Load(); err == nil {
+				state.email = email
+			}
+		}
+	}
+
+	// Custom-tool toggles (read+write pre-checked, delete off).
+	for _, info := range mcpserver.ToolCatalog() {
+		state.toolRows = append(state.toolRows, toolRow{
+			id:      info.Name,
+			tier:    info.Tier,
+			checked: info.Tier == mcpserver.TierRead || info.Tier == mcpserver.TierWrite,
+		})
+	}
+
+	if opts.Uninstall {
+		for _, harness := range installer.Detect(ctx) {
+			if harness.Configured {
+				state.registered = append(state.registered, harness.ID)
+				state.harnesses = append(state.harnesses, harness)
+			}
+		}
+		if len(state.registered) == 0 {
+			fmt.Fprintln(opts.Stdout, "  favro-mcp is not registered with any client.")
+			return 0
+		}
+		state.step, state.choice = stepPlan, 1
+	}
+
+	program := tea.NewProgram(state, tea.WithContext(ctx),
+		tea.WithInput(opts.Stdin), tea.WithOutput(opts.Stdout))
+	if _, err := program.Run(); err != nil && !state.settled {
+		// Only before the point of no return. A signal arriving while the
+		// summary of a finished setup is on screen is not a failed setup, and
+		// reporting it as one makes the install script announce that configure
+		// did not complete.
+		fmt.Fprintln(opts.Stderr, "favro-mcp:", err)
+		return 1
+	}
+
+	if state.failure != "" {
+		fmt.Fprintln(opts.Stderr, "favro-mcp:", state.failure)
+		return 1
+	}
+	if state.cancel && !state.settled {
+		fmt.Fprintln(opts.Stdout, "  Cancelled; no changes were made.")
+		// Zero, so the installer script does not follow a deliberate cancel
+		// with "configure did not complete".
+		return 0
+	}
+	for _, result := range state.results {
+		if result.State == detectharness.ApplyFailed || result.State == detectharness.ApplyConflict {
+			return 1
+		}
+	}
+	return 0
 }
