@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/lh-etals/favro-mcp/internal/favro"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -37,16 +39,25 @@ func registerCards(srv *mcp.Server, s *Server) {
 // --- list_cards ------------------------------------------------------------
 
 type listCardsArgs struct {
-	Board    string  `json:"board" jsonschema:"The board's widget_common_id, name, or ID"`
-	Column   *string `json:"column,omitempty" jsonschema:"Optional column ID or name to filter by"`
-	Archived *bool   `json:"archived,omitempty" jsonschema:"Filter by archived status: true=only archived, false=only non-archived, omit=all"`
-	Query    *string `json:"query,omitempty" jsonschema:"Case-insensitive substring filter on card name (client-side search)"`
-	Page     int     `json:"page,omitempty" jsonschema:"Page number (0-indexed, default 0)"`
+	Board     string  `json:"board" jsonschema:"The board's widget_common_id, name, or ID"`
+	Column    *string `json:"column,omitempty" jsonschema:"Optional column ID or name to filter by"`
+	Archived  *bool   `json:"archived,omitempty" jsonschema:"Filter by archived status: true=only archived, false=only non-archived, omit=all"`
+	Query     *string `json:"query,omitempty" jsonschema:"Case-insensitive substring filter on card name (client-side search)"`
+	Page      int     `json:"page,omitempty" jsonschema:"Page number (0-indexed, default 0)"`
+	Detail    *string `json:"detail,omitempty" jsonschema:"'summary' (default) or 'full'. Full adds card_common_id, resolved column name, lane, assignments, tags, dates, custom fields, and a description content hash - everything needed to detect a card's fields changing without a per-card get_card_details call."`
+	RequestID *string `json:"request_id,omitempty" jsonschema:"The request_id echoed by a prior list_cards call on this board. Pass it back in on later pages of the same crawl so every page reads from the same server-side snapshot instead of whatever the board looks like by the time each page is fetched; omit on the first page."`
 }
 
 func (s *Server) listCards(_ context.Context, _ *mcp.CallToolRequest, args listCardsArgs) (*mcp.CallToolResult, any, error) {
 	if args.Page < 0 {
 		return jsonResult(nil, fmt.Errorf("page must be >= 0"))
+	}
+	detail := "summary"
+	if args.Detail != nil && *args.Detail != "" {
+		detail = *args.Detail
+	}
+	if detail != "summary" && detail != "full" {
+		return jsonResult(nil, fmt.Errorf("detail must be 'summary' or 'full', got %q", detail))
 	}
 	if _, err := s.requireOrg(); err != nil {
 		return jsonResult(nil, err)
@@ -68,37 +79,76 @@ func (s *Server) listCards(_ context.Context, _ *mcp.CallToolRequest, args listC
 		f.ColumnID = col.ColumnID
 	}
 	f.Archived = args.Archived
-	cards, totalPages, err := client.GetCardsPage(f, args.Page)
+	page, err := client.GetCardsPage(f, args.Page, strOr(args.RequestID))
 	if err != nil {
 		return jsonResult(nil, err)
+	}
+	// Column names are resolved once per call, not per card, and only when
+	// asked for - the extra fetch isn't worth it for the common case where the
+	// bare ID is enough.
+	colNames := map[string]string{}
+	if detail == "full" {
+		if cols, err := client.GetColumns(boardID.WidgetCommonID); err == nil {
+			for _, col := range cols {
+				colNames[col.ColumnID] = col.Name
+			}
+		}
 	}
 	// Client-side name search (Favro has no server-side text search).
 	query := ""
 	if args.Query != nil {
 		query = strings.ToLower(strings.TrimSpace(*args.Query))
 	}
-	rows := make([]cardRow, 0, len(cards))
-	for _, c := range cards {
+	rows := make([]cardRow, 0, len(page.Cards))
+	for _, c := range page.Cards {
 		if query != "" && !strings.Contains(strings.ToLower(c.Name), query) {
 			continue
 		}
 		colID := strOr(c.ColumnID)
-		rows = append(rows, cardRow{
+		row := cardRow{
 			Seq: c.SequentialID, Name: c.Name, ID: c.CardID,
 			Column: colID, Tags: c.Tags, Archived: c.Archived,
-		})
+		}
+		if detail == "full" {
+			row.CardCommonID = c.CardCommonID
+			row.ColumnName = colNames[colID]
+			row.Lane = strOr(c.LaneID)
+			row.StartDate = strOr(c.StartDate)
+			row.DueDate = strOr(c.DueDate)
+			row.CreatedAt = strOr(c.CreatedAt)
+			for _, a := range c.Assignments {
+				row.Assignments = append(row.Assignments, assignmentRow{UserID: a.UserID, Completed: a.Completed})
+			}
+			for _, cf := range c.CustomFields {
+				row.CustomFields = append(row.CustomFields, cardCustomFieldRow{ID: cf.CustomFieldID, Value: cf.Value})
+			}
+			// Not a security hash, just a small, stable stand-in for the
+			// description body so a diffing client can detect an edit without
+			// paying for the full text on every poll. GetCardsPage requests
+			// descriptionFormat=markdown and only falls back to Favro's default
+			// format on a 500, so a hash computed during that rare fallback can
+			// differ from one computed normally even when the text didn't
+			// change - a possible false-positive, not a false-negative.
+			row.DescriptionHash = contentHash(strOr(c.DetailedDescription))
+		}
+		rows = append(rows, row)
 	}
+	// Favro documents no sort order for /cards. Sorting here at least makes
+	// the content of a given page read the same way call to call; it does not
+	// by itself make paging over a changing board safe - request_id does that.
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Seq < rows[j].Seq })
 	front := listCardsFront{
-		Board: boardID.Name,
-		Page:  args.Page,
-		Pages: totalPages,
-		Cards: rows,
+		Board:     boardID.Name,
+		Page:      args.Page,
+		Pages:     page.Pages,
+		RequestID: page.RequestID,
+		Cards:     rows,
 	}
 	if query != "" {
 		front.Query = *args.Query
 	}
-	body := fmt.Sprintf("%d card(s) (page %d/%d).", len(rows), args.Page, totalPages)
-	if totalPages > 1 && args.Page < totalPages-1 {
+	body := fmt.Sprintf("%d card(s) (page %d/%d).", len(rows), args.Page, page.Pages)
+	if page.Pages > 1 && args.Page < page.Pages-1 {
 		body += fmt.Sprintf(" Next: page=%d.", args.Page+1)
 	}
 	return textResult(rendered{front: front, body: body}.String())
@@ -106,21 +156,44 @@ func (s *Server) listCards(_ context.Context, _ *mcp.CallToolRequest, args listC
 
 // listCardsFront is the ordered frontmatter for list_cards.
 type listCardsFront struct {
-	Board string    `yaml:"board"`
-	Page  int       `yaml:"page"`
-	Pages int       `yaml:"pages"`
-	Query string    `yaml:"query,omitempty"`
-	Cards []cardRow `yaml:"cards"`
+	Board     string    `yaml:"board"`
+	Page      int       `yaml:"page"`
+	Pages     int       `yaml:"pages"`
+	RequestID string    `yaml:"request_id,omitempty"`
+	Query     string    `yaml:"query,omitempty"`
+	Cards     []cardRow `yaml:"cards"`
 }
 
-// cardRow is one row of list_cards output.
+// cardRow is one row of list_cards output. Fields past Archived are populated
+// only when detail=full; they stay zero (and so omitted) otherwise, which is
+// what keeps the default output identical to before this field existed.
 type cardRow struct {
 	Seq      int      `yaml:"seq"`
 	Name     string   `yaml:"name"`
-	ID       string   `yaml:"id"`
+	ID       string   `yaml:"id"` // this is cardId (board-instance-specific), not cardCommonId
 	Column   string   `yaml:"column,omitempty"`
 	Tags     []string `yaml:"tags,omitempty"`
 	Archived bool     `yaml:"archived,omitempty"`
+
+	CardCommonID    string               `yaml:"card_common_id,omitempty"` // the stable id GetComments and friends need
+	ColumnName      string               `yaml:"column_name,omitempty"`
+	Lane            string               `yaml:"lane,omitempty"`
+	Assignments     []assignmentRow      `yaml:"assignments,omitempty"`
+	CustomFields    []cardCustomFieldRow `yaml:"custom_fields,omitempty"`
+	StartDate       string               `yaml:"start_date,omitempty"`
+	DueDate         string               `yaml:"due_date,omitempty"`
+	CreatedAt       string               `yaml:"created_at,omitempty"`
+	DescriptionHash string               `yaml:"description_hash,omitempty"`
+}
+
+type assignmentRow struct {
+	UserID    string `yaml:"user_id"`
+	Completed bool   `yaml:"completed,omitempty"`
+}
+
+type cardCustomFieldRow struct {
+	ID    string `yaml:"id"`
+	Value any    `yaml:"value,omitempty"`
 }
 
 // --- list_custom_fields ----------------------------------------------------
@@ -188,6 +261,7 @@ func asString(v any) string {
 type getCardDetailsArgs struct {
 	Card  string  `json:"card" jsonschema:"Card ID, sequential ID (#123), or name"`
 	Board *string `json:"board,omitempty" jsonschema:"Board ID or name (needed for name lookups)"`
+	Since *string `json:"since,omitempty" jsonschema:"ISO-8601 timestamp. Only include comments created or last edited at/after this time - everything else about the card is still returned in full."`
 }
 
 func (s *Server) getCardDetails(_ context.Context, _ *mcp.CallToolRequest, args getCardDetailsArgs) (*mcp.CallToolResult, any, error) {
@@ -229,6 +303,25 @@ func (s *Server) getCardDetails(_ context.Context, _ *mcp.CallToolRequest, args 
 	comments, err := client.GetComments(c.CardCommonID)
 	if err != nil {
 		return jsonResult(nil, err)
+	}
+	if args.Since != nil && *args.Since != "" {
+		cutoff, err := time.Parse(time.RFC3339Nano, *args.Since)
+		if err != nil {
+			return jsonResult(nil, fmt.Errorf("since: invalid ISO-8601 timestamp: %w", err))
+		}
+		filtered := comments[:0]
+		for _, cm := range comments {
+			when := cm.Created
+			if cm.LastUpdated != nil && *cm.LastUpdated != "" {
+				when = *cm.LastUpdated
+			}
+			// A comment whose timestamp Favro sends in a shape this can't parse
+			// is kept rather than silently dropped from the response.
+			if t, err := time.Parse(time.RFC3339Nano, when); err != nil || !t.Before(cutoff) {
+				filtered = append(filtered, cm)
+			}
+		}
+		comments = filtered
 	}
 
 	// Best-effort name resolution (fall back to IDs on any failure).
@@ -342,7 +435,11 @@ func (s *Server) getCardDetails(_ context.Context, _ *mcp.CallToolRequest, args 
 			if n := userNames[cm.UserID]; n != "" {
 				who = n
 			}
-			fmt.Fprintf(&b, "\n- **%s** (%s): %s\n", who, cm.Created, cm.Comment)
+			when := cm.Created
+			if cm.LastUpdated != nil && *cm.LastUpdated != "" && *cm.LastUpdated != cm.Created {
+				when = fmt.Sprintf("created %s, edited %s", cm.Created, *cm.LastUpdated)
+			}
+			fmt.Fprintf(&b, "\n- **%s** (%s): %s\n", who, when, cm.Comment)
 		}
 	}
 

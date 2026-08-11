@@ -206,31 +206,42 @@ func (c *Client) GetCards(f CardFilter) ([]Card, error) {
 	return decodeMany[Card](items)
 }
 
-func (c *Client) GetCardsPage(f CardFilter, page int) ([]Card, int, error) {
+// CardPage is one page of GetCardsPage's result: the cards, the total page
+// count, and the requestId Favro served it from. Pass RequestID back in on a
+// later page of the same crawl to read it from the same cached snapshot
+// instead of whatever the board looks like by the time that page is fetched.
+type CardPage struct {
+	Cards     []Card
+	Pages     int
+	RequestID string
+}
+
+func (c *Client) GetCardsPage(f CardFilter, page int, requestID string) (CardPage, error) {
 	var items []map[string]any
 	var total int
+	var reqID string
 	var err error
-	items, total, err = func(useMarkdown bool) ([]map[string]any, int, error) {
+	items, total, reqID, err = func(useMarkdown bool) ([]map[string]any, int, string, error) {
 		p := f.params()
 		if useMarkdown {
 			p.Set("descriptionFormat", "markdown")
 		}
-		return c.paginateSingle("/cards", p, page)
+		return c.paginateSingle("/cards", p, page, requestID)
 	}(true)
 	if err != nil {
 		if apiErr, ok := err.(*APIError); ok && apiErr.Status == 500 {
 			p := f.params()
-			items, total, err = c.paginateSingle("/cards", p, page)
+			items, total, reqID, err = c.paginateSingle("/cards", p, page, requestID)
 		}
 	}
 	if err != nil {
-		return nil, 0, err
+		return CardPage{}, err
 	}
 	cards, err := decodeMany[Card](items)
 	if err != nil {
-		return nil, 0, err
+		return CardPage{}, err
 	}
-	return cards, total, nil
+	return CardPage{Cards: cards, Pages: total, RequestID: reqID}, nil
 }
 
 func (c *Client) GetCard(cardID string) (*Card, error) {

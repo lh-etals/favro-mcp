@@ -65,6 +65,66 @@ func TestPaginateAllMissingRequestId(t *testing.T) {
 	}
 }
 
+func TestPaginateSingleWithoutRequestID(t *testing.T) {
+	calls := 0
+	_, cleanup := mock(t, func(m, p, q string) (int, any) {
+		calls++
+		if m == "GET" && p == "/api/v1/widgets" {
+			if !strings.Contains(q, "requestId=") {
+				return 200, map[string]any{"requestId": "req1", "pages": 2, "entities": []any{
+					map[string]any{"name": "A"},
+				}}
+			}
+			if strings.Contains(q, "requestId=req1") && strings.Contains(q, "page=1") {
+				return 200, map[string]any{"entities": []any{map[string]any{"name": "B"}}}
+			}
+			return 404, nil
+		}
+		return 404, nil
+	})
+	defer cleanup()
+	c := NewClient("e", "t", "")
+	items, total, reqID, err := c.paginateSingle("/widgets", nil, 1, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || total != 2 || reqID != "req1" {
+		t.Errorf("got items=%d total=%d reqID=%q, want 1, 2, req1", len(items), total, reqID)
+	}
+	// No requestID supplied: page 0 has to be fetched first to mint one, then
+	// page 1 - two requests, matching every caller that predates request_id
+	// threading.
+	if calls != 2 {
+		t.Errorf("got %d requests, want 2 (page 0 to mint a requestId, then page 1)", calls)
+	}
+}
+
+func TestPaginateSingleReusesRequestID(t *testing.T) {
+	calls := 0
+	_, cleanup := mock(t, func(m, p, q string) (int, any) {
+		calls++
+		if m == "GET" && p == "/api/v1/widgets" &&
+			strings.Contains(q, "requestId=req1") && strings.Contains(q, "page=1") {
+			return 200, map[string]any{"entities": []any{map[string]any{"name": "B"}}}
+		}
+		return 404, nil
+	})
+	defer cleanup()
+	c := NewClient("e", "t", "")
+	items, _, reqID, err := c.paginateSingle("/widgets", nil, 1, "req1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || reqID != "req1" {
+		t.Errorf("got items=%d reqID=%q, want 1, req1", len(items), reqID)
+	}
+	// A requestID was supplied: page 1 is fetched directly against that
+	// snapshot, with no wasted page-0 fetch first.
+	if calls != 1 {
+		t.Errorf("got %d requests, want 1 (page 1 fetched directly against the supplied requestId)", calls)
+	}
+}
+
 func TestCardsMarkdownFallback(t *testing.T) {
 	_, cleanup := mock(t, func(m, p, q string) (int, any) {
 		if m == "GET" && p == "/api/v1/cards" {

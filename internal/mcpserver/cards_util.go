@@ -1,8 +1,18 @@
 package mcpserver
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 )
+
+// contentHash is a small, stable stand-in for a text body - change detection,
+// not security - so a diffing client can tell a description edited from one
+// that didn't without paying for the full text on every poll.
+func contentHash(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])[:16]
+}
 
 // stripTasklistFromDescription removes the trailing tasklist checkbox lines that
 // Favro auto-appends to a card's detailedDescription. tasklists is a list of

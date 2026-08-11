@@ -287,10 +287,11 @@ func runListCardsCmd(args []string) {
 		}
 		f.ColumnID = col.ColumnID
 	}
-	cards, total, err := client.GetCardsPage(f, *page-1)
+	result, err := client.GetCardsPage(f, *page-1, "")
 	if err != nil {
 		fail(err)
 	}
+	cards, total := result.Cards, result.Pages
 	if len(cards) == 0 {
 		fmt.Println("No cards found.")
 		return

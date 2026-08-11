@@ -218,29 +218,50 @@ func (c *Client) paginateAll(path string, params url.Values) ([]map[string]any, 
 	return all, nil
 }
 
-// paginateSingle fetches a single page (0-indexed) and returns total pages.
-func (c *Client) paginateSingle(path string, params url.Values, page int) ([]map[string]any, int, error) {
+// paginateSingle fetches a single page (0-indexed) and returns its entities,
+// total pages, and the requestId Favro used to serve it.
+//
+// Passing a non-empty requestID for page > 0 reuses that snapshot directly
+// instead of re-fetching page 0 first to mint a fresh one - the only way a
+// caller walking pages 0..N across separate calls can be sure every page came
+// from the same cached view of the board, rather than each page landing on
+// whatever changed in between.
+func (c *Client) paginateSingle(path string, params url.Values, page int, requestID string) ([]map[string]any, int, string, error) {
 	if params == nil {
 		params = url.Values{}
 	}
 	if page == 0 {
 		data, err := c.get(path, params, true)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, "", err
 		}
-		return entitiesOf(data), pagesOf(data), nil
+		reqID, _ := data["requestId"].(string)
+		return entitiesOf(data), pagesOf(data), reqID, nil
+	}
+	if requestID != "" {
+		p := url.Values{}
+		for k, vs := range params {
+			p[k] = vs
+		}
+		p.Set("requestId", requestID)
+		p.Set("page", strconv.Itoa(page))
+		data, err := c.get(path, p, true)
+		if err != nil {
+			return nil, 0, requestID, err
+		}
+		return entitiesOf(data), pagesOf(data), requestID, nil
 	}
 	first, err := c.get(path, params, true)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, "", err
 	}
 	reqID, _ := first["requestId"].(string)
 	total := pagesOf(first)
 	if page >= total {
-		return nil, total, nil
+		return nil, total, reqID, nil
 	}
 	if reqID == "" {
-		return nil, total, nil
+		return nil, total, "", nil
 	}
 	p := url.Values{}
 	for k, vs := range params {
@@ -250,9 +271,9 @@ func (c *Client) paginateSingle(path string, params url.Values, page int) ([]map
 	p.Set("page", strconv.Itoa(page))
 	data, err := c.get(path, p, true)
 	if err != nil {
-		return nil, total, err
+		return nil, total, reqID, err
 	}
-	return entitiesOf(data), total, nil
+	return entitiesOf(data), total, reqID, nil
 }
 
 // decodeOne unmarshals a single response object into a typed value.

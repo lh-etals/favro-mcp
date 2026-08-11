@@ -1049,8 +1049,8 @@ func loadCardsCmd(s *Session, boardID string, page int) tea.Cmd {
 	client := s.Client()
 	filter := favro.CardFilter{WidgetCommonID: boardID, Unique: true}
 	return func() tea.Msg {
-		cards, total, err := client.GetCardsPage(filter, page)
-		return cardsLoadedMsg{cards: cards, total: total, err: err}
+		result, err := client.GetCardsPage(filter, page, "")
+		return cardsLoadedMsg{cards: result.Cards, total: result.Pages, err: err}
 	}
 }
 

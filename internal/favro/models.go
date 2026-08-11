@@ -99,6 +99,7 @@ type Card struct {
 	Tags                []string          `json:"tags,omitempty"`
 	StartDate           *string           `json:"startDate,omitempty"`
 	DueDate             *string           `json:"dueDate,omitempty"`
+	CreatedAt           *string           `json:"createdAt,omitempty"`
 	Assignments         []CardAssignment  `json:"assignments,omitempty"`
 	NumComments         int               `json:"numComments"`
 	TasksTotal          int               `json:"tasksTotal"`
